@@ -1,0 +1,69 @@
+#global import
+import re
+
+#local import
+from app.schemas.typing import *
+from app.errors.errors import InvalidMutationSyntax
+
+
+class IsValid:
+    """
+    Cheks input syntax.
+    """
+    def mutations(mutations: list[str]) -> bool:
+        for s in mutations:
+            """
+            verifies a mutation syntaxe
+            """
+            if not bool(re.match(r"^>p\.\d+\.[atgc]>[atgc]$", s)):
+                raise InvalidMutationSyntax(
+                    f"Mutation '{s}' does not match syntax: >p.<pos>.<ref>><alt>"
+                )
+        return True
+    
+    def sequence(sequence: str) -> bool:
+        """
+        Verifies the sequence syntaxe
+        """
+        return bool(re.match(r"^[ACGTacgt]+$", sequence))
+
+class Scoring:
+    """
+    Calculat score.
+    """
+    def mut(proba_delta: JSON, norm="euclidian")->float:
+        """
+        Return a score quantifying the importance of a mutation regarding the change in splicing scores.
+        Here, it is the norm of the vector composed of the values from 'proba_json'(acceptor and donor summed in one vector).
+
+        The proposed norms are: 'euclidean' (default), 'manhattan', and 'quadratic'.
+        """
+        sum_delta_score = []
+
+        for key in ("acceptor_proba", "donor_proba"):
+            proba_delta_ad = proba_delta[key]
+            for i in proba_delta_ad:
+                sum_delta_score.append(proba_delta_ad[i]["value"])
+
+        sum_delta_score = []
+
+
+        for key in ("acceptor_proba", "donor_proba"):
+            proba_delta_ad = proba_delta[key]
+            for i in proba_delta_ad:
+                sum_delta_score.append(proba_delta_ad[i]["value"])
+
+        sum_delta_score = np.array(sum_delta_score)
+
+        match norm.strip().lower():
+            case "euclidian":
+                return float(np.sqrt(np.sum(sum_delta_score ** 2)))
+            case "manhattan":
+                return float(np.sum(np.abs(sum_delta_score)))
+            case "quadratic":
+                return float(np.sqrt(np.mean(sum_delta_score ** 2)))
+            case _:
+                raise ValueError(f"ERROR: the norm '{norm}' is not recognized.")
+
+
+

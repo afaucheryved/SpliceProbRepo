@@ -11,7 +11,7 @@ from app.domain.proba_laws_functions import ProbaLawsFunctions
 from app.domain.spliceia_calculation import tuple_mutation
 from app.test.global_var import GlobalVar
 
-class AlterationByIndexFunctions:
+class AlterationFunctionsByIndex:
 
     """
     This class provides functions that operate on ATCG sequences by index.
@@ -139,7 +139,7 @@ class AlterationByIndexFunctions:
         pattern = sequence[start0:end0]
         return AlterationByIndexFunctions.insert_pattern(sequence, pattern, index_paste, length_paste)
 
-class AlterationByPatternFunctions:
+class AlterationFunctionsByPattern:
 
     """
     This class provides functions that operate on ATCG sequences.

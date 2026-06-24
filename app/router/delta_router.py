@@ -2,7 +2,8 @@
 from fastapi import APIRouter
 from app.schemas.general_schema import GeneticVariant
 from app.schemas.typing import JSON
-from app.services.general_services import ProbaServices, IsValid
+from app.services.general_services import ProbaServices
+from app.domain.calcul_function import IsValid
 
 router = APIRouter()
 

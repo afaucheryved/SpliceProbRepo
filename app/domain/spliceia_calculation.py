@@ -1,11 +1,11 @@
 #general importation
 from spliceai.utils import one_hot_encode
 import numpy as np
-import numpy as np
 from functools import wraps
 from keras.models import load_model
 from pkg_resources import resource_filename
 import time as t
+import os
 
 #local importation
 from app.schemas.typing import genome, mut
@@ -46,6 +46,7 @@ def calcul_y(dico_data: dict[str, genome], context: int = 10000, specified_model
     x = one_hot_encoder(dico_data, context)
     if specified_models_used is None:
         paths = ('models/spliceai{}.h5'.format(x) for x in range(1, 6))
+        #assert all(os.path.exists(n) for n in paths)
         models = [load_model(resource_filename('spliceai', x)) for x in paths]
         y = np.mean([m.predict(x, batch_size=len(dico_data)) for m in models], axis=0)[0]
     else:

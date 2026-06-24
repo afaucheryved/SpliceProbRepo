@@ -3,12 +3,15 @@ import numpy as np
 import random as rd
 import ruptures as rpt
 import matplotlib.pyplot as plt
+import tensorflow as tf
+import os
+from pkg_resources import resource_filename
 
 #local import
 from app.schemas.typing import mut
 from app.schemas.typing import *
 from app.services.general_services import ProbaServices as ps, GenomicServices as gs
-from app.domain.sequence_functions import AlterationByIndexFunctions as abif
+from app.domain.sequence_functions import AlterationFunctionsByIndex as abif
 from app.domain.calcul_function import Scoring
 from app.test.global_var import GlobalVar
 from app.schemas.general_schema import GeneticVariant
@@ -17,6 +20,7 @@ class ImportanceSplicingSearch:
     """
     Have a function that identify the patterns and locations having the greatest impact on splicing probabilities changes.
     Returns a dictionary mapping each position to an importance score regarding the splicing process.
+    Maybe too long. use gradient instead ?
     """
 
     def _zona(sequence: genome, 
@@ -90,4 +94,102 @@ class ImportanceSplicingSearch:
         to identify the patterns most significant for altering the splicing score within the previously identified regions of importance.
         """
         return
+
+
+## ---- NN POV ----
+
+class SpliceAIModels(tf.keras.Model):
+    """
+    Represents a Keras model that returns the average of the specified SpliceAI models.
+    Fully compatible with tf.GradientTape for gradient computation.
+    We have to avoid using y_calcul() in order to track the gradient.
+    """
+    def __init__(self, models_used: set[int] = {1, 2, 3, 4, 5}):
+        super().__init__() # Initialize the parent tf.keras.Model class
+        
+        valid_models = {1, 2, 3, 4, 5}
+        if not models_used.issubset(valid_models):
+            raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5}.")
+        
+        # In TensorFlow, a standard Python list is sufficient to store sub-models
+        self.models_list = []
+        
+        for n in models_used:
+            # 1. Replicate exactly how calcul_y finds the internal package files
+            relative_path = f'models/spliceai{n}.h5'
+            absolute_package_path = resource_filename('spliceai', relative_path)
+            
+            # 2. Load it natively into the list
+            print(f"Loading SpliceAI model {n} from: {absolute_package_path}")
+            model = tf.keras.models.load_model(absolute_package_path)
+            self.models_list.append(model)
+
+    def call(self, x):
+        """
+        The forward pass of TensorFlow (equivalent to forward() in PyTorch).
+        x: A TensorFlow tensor representing the DNA sequence [Batch, Length, 4]
+        """
+        # Apply each model to the input x
+        outputs = [model(x) for model in self.models_list]
+        
+        # Stack predictions (Dimension 0 = the models)
+        stacked_outputs = tf.stack(outputs, axis=0)
+        
+        # Compute the average over the models dimension (axis=0)
+        # Use tf.reduce_mean to preserve gradient traceability
+        y_mean = tf.reduce_mean(stacked_outputs, axis=0)
+        
+        return y_mean
+
+
+def get_gradients(ensemble_model, input_sequence, position, site_type):
+    """
+    Computes the gradient of the targeted output with respect to the input sequence.
+    site_type: 0 for Acceptor Gain, 1 for Donor Gain, 2 for Acceptor Loss, 3 for Donor Loss.
+    site_type: here, only use 1 and 2
+    """
+    # Force TensorFlow to track operations on the DNA sequence
+    sequence = tf.convert_to_tensor(input_sequence, dtype=tf.float32)
+    with tf.GradientTape() as tape:
+        tape.watch(sequence)
+        
+        # Global prediction: Shape [Batch, Sequence_Length, 4]
+        predictions = ensemble_model(sequence)
+        
+        # Extract the specific unique scalar score of the site of interest
+        # Example: First element of the batch (0), at the desired position and site type
+        target_score = predictions[0, position, site_type]
+        
+    # TensorFlow computes the derivative of target_score with respect to sequence
+    gradients = tape.gradient(target_score, sequence)
+    return gradients
+
+
+def tf_integrated_gradients(ensemble_model, input_sequence, position, site_type, num_steps=100):
+    """
+    Native implementation of the Integrated Gradients algorithm for SpliceAI under TensorFlow.
+    """
+    # 1. Define a neutral baseline (a matrix of zeros matching the input shape)
+    baseline = tf.zeros_like(input_sequence, dtype=tf.float32)
     
+    # 2. Generate the interpolation steps (alphas from 0.0 to 1.0)
+    alphas = tf.linspace(0.0, 1.0, num_steps + 1)
+    
+    # 3. Compute gradients for each intermediate step
+    all_gradients = []
+    for alpha in alphas:
+        # Linear intermediate sequence: baseline + alpha * (input - baseline)
+        print(input_sequence, baseline)
+        interpolated_input = baseline + alpha * (input_sequence - baseline)
+        
+        # Compute the gradient on this intermediate sequence
+        grads = get_gradients(ensemble_model, interpolated_input, position, site_type)
+        all_gradients.append(grads)
+        
+    # 4. Average all the accumulated gradients
+    mean_gradients = tf.reduce_mean(tf.stack(all_gradients, axis=0), axis=0)
+    
+    # 5. Multiply by the difference (Input - Baseline) to get the final attribution scores
+    integrated_grads = (input_sequence - baseline) * mean_gradients
+    
+    return mean_gradients.numpy() # Convert back to numpy for final analysis

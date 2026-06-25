@@ -12,9 +12,9 @@ class GlobalVar:
     #parameters
     CONTEXT: int= 10000
 
-    #paths
+    #paths (test)
     PATH_FILE_FA: path="" # read
-    PATH_FILE_JSON: path="test/proba.json" # write
+    PATH_FILE_JSON: path="app/test/proba.json" # write
 
     #bases manipulation
     BASES: str="acgt"

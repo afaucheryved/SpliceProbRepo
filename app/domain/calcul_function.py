@@ -31,7 +31,7 @@ class Scoring:
     """
     Calculat score.
     """
-    def mut(proba_delta: JSON, norm="euclidian")->float:
+    def mut(proba_delta: JSON, method="euclidian")->float:
         """
         Return a score quantifying the importance of a mutation regarding the change in splicing scores.
         Here, it is the norm of the vector composed of the values from 'proba_json'(acceptor and donor summed in one vector).
@@ -40,22 +40,21 @@ class Scoring:
         """
         sum_delta_score = []
 
-        for key in ("acceptor_proba", "donor_proba"):
+        for key in ("acceptor_proba", "donor_proba"): #proba
             proba_delta_ad = proba_delta[key]
             for i in proba_delta_ad:
                 sum_delta_score.append(proba_delta_ad[i]["value"])
 
         sum_delta_score = []
 
-
-        for key in ("acceptor_proba", "donor_proba"):
+        for key in ("acceptor_proba", "donor_proba"): #acceptor
             proba_delta_ad = proba_delta[key]
             for i in proba_delta_ad:
                 sum_delta_score.append(proba_delta_ad[i]["value"])
 
         sum_delta_score = np.array(sum_delta_score)
 
-        match norm.strip().lower():
+        match method.strip().lower():
             case "euclidian":
                 return float(np.sqrt(np.sum(sum_delta_score ** 2)))
             case "manhattan":
@@ -63,7 +62,7 @@ class Scoring:
             case "quadratic":
                 return float(np.sqrt(np.mean(sum_delta_score ** 2)))
             case _:
-                raise ValueError(f"ERROR: the norm '{norm}' is not recognized.")
+                raise ValueError(f"ERROR: the method '{method}' is not recognized.")
 
 
 

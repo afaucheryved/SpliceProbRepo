@@ -96,7 +96,8 @@ class ImportanceSplicingSearch:
         return
 
 
-## ---- NN POV ----
+## ---- ML POV ----
+#this is a test 
 
 class SpliceAIModels(tf.keras.Model):
     """
@@ -167,29 +168,43 @@ def get_gradients(ensemble_model, input_sequence, position, site_type):
 
 def tf_integrated_gradients(ensemble_model, input_sequence, position, site_type, num_steps=100):
     """
-    Native implementation of the Integrated Gradients algorithm for SpliceAI under TensorFlow.
+    Implémentation vectorisée d'Integrated Gradients pour SpliceAI sous TensorFlow.
+    Batch toutes les étapes d'interpolation en un seul passage GradientTape
+    au lieu de num_steps+1 appels séquentiels.
     """
-    # 1. Define a neutral baseline (a matrix of zeros matching the input shape)
-    baseline = tf.zeros_like(input_sequence, dtype=tf.float32)
-    
-    # 2. Generate the interpolation steps (alphas from 0.0 to 1.0)
+    input_sequence = tf.convert_to_tensor(input_sequence, dtype=tf.float32)
+
+    # 1. Baseline neutre
+    baseline = tf.zeros_like(input_sequence)
+
+    # 2. Pas d'interpolation : shape [num_steps+1]
     alphas = tf.linspace(0.0, 1.0, num_steps + 1)
-    
-    # 3. Compute gradients for each intermediate step
-    all_gradients = []
-    for alpha in alphas:
-        # Linear intermediate sequence: baseline + alpha * (input - baseline)
-        print(input_sequence, baseline)
-        interpolated_input = baseline + alpha * (input_sequence - baseline)
-        
-        # Compute the gradient on this intermediate sequence
-        grads = get_gradients(ensemble_model, interpolated_input, position, site_type)
-        all_gradients.append(grads)
-        
-    # 4. Average all the accumulated gradients
-    mean_gradients = tf.reduce_mean(tf.stack(all_gradients, axis=0), axis=0)
-    
-    # 5. Multiply by the difference (Input - Baseline) to get the final attribution scores
-    integrated_grads = (input_sequence - baseline) * mean_gradients
-    
-    return mean_gradients.numpy() # Convert back to numpy for final analysis
+
+    # 3. Construire toutes les séquences interpolées en une seule fois
+    # input_sequence: [1, L, 4] -> on retire la dim batch=1 pour la combiner avec alphas
+    delta = input_sequence - baseline  # [1, L, 4]
+
+    # reshape alphas pour le broadcasting : [num_steps+1, 1, 1, 1]
+    alphas_reshaped = tf.reshape(alphas, (-1, 1, 1, 1))
+
+    # baseline et delta répétés implicitement via broadcasting
+    # résultat : [num_steps+1, 1, L, 4] -> on fusionne en [num_steps+1, L, 4]
+    interpolated_inputs = baseline + alphas_reshaped * delta  # [num_steps+1, 1, L, 4]
+    interpolated_inputs = tf.squeeze(interpolated_inputs, axis=1)  # [num_steps+1, L, 4]
+
+    # 4. Calcul du gradient en un seul passage (batché)
+    with tf.GradientTape() as tape:
+        tape.watch(interpolated_inputs)
+        predictions = ensemble_model(interpolated_inputs)  # [num_steps+1, L, 4]
+        target_scores = predictions[:, position, site_type]  # [num_steps+1]
+
+    # gradients shape : [num_steps+1, L, 4]
+    gradients = tape.gradient(target_scores, interpolated_inputs)
+
+    # 5. Moyenne des gradients (approximation de l'intégrale)
+    mean_gradients = tf.reduce_mean(gradients, axis=0)  # [L, 4]
+
+    # 6. Attribution finale = (input - baseline) * gradient moyen
+    integrated_grads = tf.squeeze(delta, axis=0) * mean_gradients  # [L, 4]
+
+    return integrated_grads.numpy()

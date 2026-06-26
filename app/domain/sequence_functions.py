@@ -19,7 +19,7 @@ class AlterationFunctionsByIndex:
     """
 
     @staticmethod
-    def insert_pattern(sequence: genome,
+    def insert(sequence: genome,
                             pattern :str, 
                             index :int,
                             length : str | int = 0 )-> genome:
@@ -56,7 +56,7 @@ class AlterationFunctionsByIndex:
         return sequence[:idx0] + insert + sequence[idx0 + replace_length:]
     
     @staticmethod
-    def delete_pattern(sequence: genome, 
+    def delete(sequence: genome, 
                        start : int, 
                        end : int | None = None,
                        length: int | str | None = None)-> genome:
@@ -86,7 +86,7 @@ class AlterationFunctionsByIndex:
         return sequence[:start0] + sequence[end0:]
     
     @staticmethod
-    def move_pattern(sequence: genome, 
+    def move(sequence: genome, 
                      start_cc: int,
                      end_cc: int,
                      index_paste: int,
@@ -107,17 +107,17 @@ class AlterationFunctionsByIndex:
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
         pattern = sequence[start0:end0]
-        new_sequence = AlterationByIndexFunctions.delete_pattern(sequence, start_cc, end_cc)
+        new_sequence = AlterationFunctionsByIndex.delete_pattern(sequence, start_cc, end_cc)
 
         # Adjusts index_paste if the paste point was located after the deleted area.
         cut_length = end0 - start0
         if index_paste > start_cc:
             index_paste -= cut_length
 
-        return AlterationByIndexFunctions.insert_pattern(new_sequence, pattern, index_paste, length_paste)
+        return AlterationFunctionsByIndex.insert_pattern(new_sequence, pattern, index_paste, length_paste)
     
     @staticmethod
-    def copy_past_pattern(sequence: genome, 
+    def copy_past(sequence: genome, 
                      start_cc: int,
                      end_cc: int, 
                      index_paste: int,
@@ -137,7 +137,7 @@ class AlterationFunctionsByIndex:
         end0 = end_cc
 
         pattern = sequence[start0:end0]
-        return AlterationByIndexFunctions.insert_pattern(sequence, pattern, index_paste, length_paste)
+        return AlterationFunctionsByIndex.insert_pattern(sequence, pattern, index_paste, length_paste)
 
 class AlterationFunctionsByPattern:
 
@@ -186,7 +186,7 @@ class AlterationFunctionsByPattern:
         return "".join(regex_parts)
     
     @staticmethod
-    def replace_pattern(sequence: genome, 
+    def replace(sequence: genome, 
                             old: str, 
                             new: str)-> genome:
         """
@@ -203,11 +203,11 @@ class AlterationFunctionsByPattern:
                                 
 
         """
-        regex_pattern = AlterationByPatternFunctions._pattern_to_regex(old)
+        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
         return re.sub(regex_pattern, new, sequence)
     
     @staticmethod
-    def delete_pattern(sequence: genome, 
+    def delete(sequence: genome, 
                        pattern: str, 
                        )-> genome:
         """
@@ -220,7 +220,7 @@ class AlterationFunctionsByPattern:
             -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
                                 |--|                       |--|                                                    
         """
-        regex_pattern = AlterationByPatternFunctions._pattern_to_regex(pattern)
+        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(pattern)
         return re.sub(regex_pattern, "", sequence)
 
 class SequenceFactory:

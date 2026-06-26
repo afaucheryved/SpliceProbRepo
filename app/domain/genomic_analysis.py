@@ -51,13 +51,12 @@ class ImportanceSplicingSearch:
                 sequence = sequence ,   
                 altered_sequences = "_", #useless here
                 )
-
-            score_mutation = Scoring.mut(ps.return_proba_delta(gv, non_altered_ref, specified_models_used={5}))
+            score_mutation = Scoring.mut(ps.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)
         
         #--- in the case of a really short sequence
-        plt.plot(mut_score) # debug
-        plt.show()
+        #plt.plot(mut_score) # debug
+        #plt.show()
         if len(mut_score) < 2:
             print("len(mut_score) < 2")
             if len(mut_score) == 1 and mut_score[0] > threshold / 100 * abs(mut_score[0]): # sup  sert à rien ?

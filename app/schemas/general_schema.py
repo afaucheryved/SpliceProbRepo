@@ -6,9 +6,9 @@ class GeneticVariant(BaseModel):
     Contain the original sequence + a set of mutations bases by bases.
     """
     name: str
-    mutations: list[str]
-    sequence: str
-    altered_sequences: str =""
+    mutations: list[str] = [""]
+    sequence: str = ""
+    altered_sequences: str = ""
 
     @field_validator('sequence')
     @classmethod

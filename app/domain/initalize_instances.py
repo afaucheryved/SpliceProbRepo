@@ -2,4 +2,4 @@ from app.domain.spliceia_calculation import SpliceAIModels
 
 my_model = SpliceAIModels()
 
-print("initialisation my_model completed !")
+print("\ninitialisation my_model completed !\n")

@@ -15,9 +15,9 @@ matplotlib.use('TkAgg') #to see the graph
 #local import
 from app.domain.sequence_functions import WindowMutationFunctions
 from app.domain.genomic_analysis import ImportanceSplicingSearch as iss
-from app.domain.genomic_analysis import  get_gradients, tf_integrated_gradients
+from app.domain.genomic_analysis import  get_gradients, tf_integrated_gradients, ImportanceSplicingSearch
 from app.domain.spliceia_calculation import one_hot_encoder
-from app.main import my_model
+from app.domain.initalize_instances import my_model
 
 #test tools
 def print_dic_lisible(func):
@@ -152,7 +152,12 @@ def function_test():
 def function_test2():
     return read_json_file("app/test/output_gradiant.txt")
 """
+
+def function_test():
+    return ImportanceSplicingSearch._zona(sequence)
+
+print(function_test())
 #function_test() # crash on run
 #function_test2() # works
 
-print(my_model.call(sequence))
+#print(my_model.call(sequence))

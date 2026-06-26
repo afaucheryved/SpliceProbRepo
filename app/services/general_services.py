@@ -8,21 +8,22 @@ from app.domain.spliceia_calculation import calcul_y
 from app.test.global_var import GlobalVar
 from app.schemas.general_schema import GeneticVariant
 from app.errors.errors import InvalidMutationSyntax
-from app.main import my_model
+from app.domain.initalize_instances import my_model
 
 class GenomicServices:
 
-    def result_per_seqences(altered: genome, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
+    def result_per_seqences(sequence: genome, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        y = my_model.call(altered) #calcul_y({"genome to calcul" : altered}, 10000, specified_models_used = specified_models_used) # y is a tuple[list[int], list[int], list[int]]
+        y = my_model.run(sequence, models_used=specified_models_used)[0]
+        
         acceptor=[float(x) for x in y[:, 1].tolist()]
         donor=[float(x) for x in y[:, 2].tolist()]
 
         proba = {
-            "acceptor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(altered, acceptor))},
-            "donor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(altered, donor))}
+            "acceptor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(sequence, acceptor))},
+            "donor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(sequence, donor))}
         }
 
         if print_cmd: print(f"altered sequence : {[p for p in proba]}")
@@ -40,14 +41,15 @@ class GenomicServices:
         altered_sequence = sequence
         for mut in mutations:
             # get the position and the new base of the mutation
-            position_mutation = int("".join(c for c in mut if c.isdigit()))
-            
-            # base mutation
-            altered_sequence = (
-                altered_sequence[:position_mutation-1]
-                + mut[-1]
-                + altered_sequence[position_mutation:]
-                )
+            if mut !="": #empty mutation -> no change
+                position_mutation = int("".join(c for c in mut if c.isdigit()))
+                
+                # base mutation
+                altered_sequence = (
+                    altered_sequence[:position_mutation-1]
+                    + mut[-1]
+                    + altered_sequence[position_mutation:]
+                    )
         return altered_sequence
 
 class ProbaServices :
@@ -57,10 +59,7 @@ class ProbaServices :
         return proba json object for simple analysis
         """
         altered = GenomicServices.altered_sequence(gv.sequence, gv.mutations)
-        result = GenomicServices.result_per_seqences(altered, 
-                                    print_cmd=False,
-                                    write_on_file=False, 
-                                    return_json=True)
+        result = GenomicServices.result_per_seqences(altered)
         result["altered sequence"] = altered
         return result
     
@@ -70,52 +69,29 @@ class ProbaServices :
         """
         altered_seq = GenomicServices.altered_sequence(gv.sequence, gv.mutations)
 
-        if not non_altered_ref:
-            non_altered_result = GenomicServices.result_per_seqences(
-                gv.sequence,
-                specified_models_used = specified_models_used
-            )
-        else: # if the non_altered_result is the same in a loop using return proba delta
-            non_altered_result = non_altered_ref
+        non_altered_result = non_altered_ref if non_altered_ref else GenomicServices.result_per_seqences(
+            gv.sequence,
+            specified_models_used=specified_models_used
+        )
 
         altered_result = GenomicServices.result_per_seqences(
             altered_seq,
-            specified_models_used = specified_models_used
+            specified_models_used=specified_models_used
         )
 
         delta_score_result = {"acceptor_proba": {}, "donor_proba": {}}
 
-        for i in range(len(gv.sequence)):
-            delta_score_result["acceptor_proba"][i] = {}
-            delta_acceptor_proba_i = (
-                altered_result["acceptor_proba"][i][altered_seq[i]]
-                - non_altered_result["acceptor_proba"][i][gv.sequence[i]]
-            )
-            delta_score_result["acceptor_proba"][i]["value"] = delta_acceptor_proba_i
+        for key in ("acceptor_proba", "donor_proba"):
+            for i in range(len(gv.sequence)):
+                altered_value = altered_result[key][i][altered_seq[i]]
+                delta_value = altered_value - non_altered_result[key][i][gv.sequence[i]]
 
-            try:
-                delta_score_result["acceptor_proba"][i]["delta_proportion_variation"] = (
-                    delta_acceptor_proba_i
-                    / altered_result["acceptor_proba"][i][altered_seq[i]]
-                )
-            except ZeroDivisionError:
-                delta_score_result["acceptor_proba"][i]["delta_proportion_variation"] = -1
+                delta_score_result[key][i] = {"value": delta_value}
 
-        for i in range(len(gv.sequence)):
-            delta_score_result["donor_proba"][i] = {}
-            delta_donor_proba = (
-                altered_result["donor_proba"][i][altered_seq[i]]
-                - non_altered_result["donor_proba"][i][gv.sequence[i]]
-            )
-            delta_score_result["donor_proba"][i]["value"] = delta_donor_proba
-
-            try:
-                delta_score_result["donor_proba"][i]["delta_proportion_variation"] = (
-                    delta_donor_proba
-                    / altered_result["donor_proba"][i][altered_seq[i]]
-                )
-            except ZeroDivisionError:
-                delta_score_result["donor_proba"][i]["delta_proportion_variation"] = -1
+                try:
+                    delta_score_result[key][i]["delta_proportion_variation"] = delta_value / altered_value
+                except ZeroDivisionError:
+                    delta_score_result[key][i]["delta_proportion_variation"] = -1
 
         delta_score_result["altered sequence"] = altered_seq
         delta_score_result["name"] = gv.name

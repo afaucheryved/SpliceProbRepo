@@ -104,7 +104,8 @@ class SpliceAIModels(tf.keras.Model):
         x_batched = np.expand_dims(encoded, axis=0)
         return x_batched
     
-    def call(self, x_input: genome, models_used: set = {1, 2, 3, 4, 5}):
+    @wrapp_calcul
+    def run(self, x_input: genome, models_used: set[int] | None = None, keep_gradiant=False):
         """
         The forward pass of TensorFlow (equivalent to forward() in PyTorch).
         x: A TensorFlow tensor representing the DNA sequence [Batch, Length, 4]
@@ -112,17 +113,22 @@ class SpliceAIModels(tf.keras.Model):
         x = self._one_hot_encoder(x_input)
         valid_models = {1, 2, 3, 4, 5}
         
-        if not models_used.issubset(valid_models):
-            raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5}.")
+        models_used_id = {1, 2, 3, 4, 5} if models_used is None else models_used
+        
+        if not models_used_id.issubset(valid_models) and not models_used is None:
+            raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5} or None.")
         
         outputs = [
             model(x)
             for index, model in enumerate(self.models_list) 
-            if index + 1 in models_used
+            if index + 1 in models_used_id
             ] #only calculate mean with used models
         
-        stacked_outputs = tf.stack(outputs, axis=0)
         
+        stacked_outputs = tf.stack(outputs, axis=0)
         y_mean = tf.reduce_mean(stacked_outputs, axis=0)
         
-        return y_mean
+        if keep_gradiant:
+            return y_mean
+        else:
+            return y_mean.numpy()

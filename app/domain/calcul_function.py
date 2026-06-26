@@ -15,9 +15,9 @@ class IsValid:
             """
             verifies a mutation syntaxe
             """
-            if not bool(re.match(r"^>p\.\d+\.[atgc]>[atgc]$", s)):
+            if not bool(re.match(r"^>p\.\d+\.[atgc]>[atgc]$", s)) and not s=="":
                 raise InvalidMutationSyntax(
-                    f"Mutation '{s}' does not match syntax: >p.<pos>.<ref>><alt>"
+                    f"Mutation '{s}' does not match syntax: >p.<pos>.<ref>><alt> or \"\" (no mutation)"
                 )
         return True
     

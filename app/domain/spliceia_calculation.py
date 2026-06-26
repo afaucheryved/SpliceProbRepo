@@ -5,7 +5,7 @@ from functools import wraps
 from keras.models import load_model
 from pkg_resources import resource_filename
 import time as t
-import os
+import tensorflow as tf
 
 #local importation
 from app.schemas.typing import genome, mut
@@ -74,3 +74,55 @@ def tuple_mutation(old: genome, new: genome)->tuple[mut]:
         for i, (b0, b1) in enumerate(zip(old, new), start=1)
         if b0 != b1
     )
+
+class SpliceAIModels(tf.keras.Model):
+    """
+    Represents a Keras model that returns the average of the specified SpliceAI models.
+    Fully compatible with tf.GradientTape for gradient computation.
+    We have to avoid using y_calcul() in order to track the gradient.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        models = {1, 2, 3, 4, 5}
+        self.models_list = []
+        
+        for n in models:
+            relative_path = f'models/spliceai{n}.h5'
+            absolute_package_path = resource_filename('spliceai', relative_path)
+            print(f"Loading SpliceAI model {n} from: {absolute_package_path}")
+            
+            model = tf.keras.models.load_model(absolute_package_path)
+            self.models_list.append(model)
+            
+    def _one_hot_encoder(self, sequence: genome, context: int =10000) -> np.ndarray[np.float32]:
+        """
+        One-hot encode each sequence with flanking CONTEXT, then stack into a batch
+        """
+        padding = 'N' * (context // 2)
+        encoded = one_hot_encode(padding + sequence + padding)
+        x_batched = np.expand_dims(encoded, axis=0)
+        return x_batched
+    
+    def call(self, x_input: genome, models_used: set = {1, 2, 3, 4, 5}):
+        """
+        The forward pass of TensorFlow (equivalent to forward() in PyTorch).
+        x: A TensorFlow tensor representing the DNA sequence [Batch, Length, 4]
+        """
+        x = self._one_hot_encoder(x_input)
+        valid_models = {1, 2, 3, 4, 5}
+        
+        if not models_used.issubset(valid_models):
+            raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5}.")
+        
+        outputs = [
+            model(x)
+            for index, model in enumerate(self.models_list) 
+            if index + 1 in models_used
+            ] #only calculate mean with used models
+        
+        stacked_outputs = tf.stack(outputs, axis=0)
+        
+        y_mean = tf.reduce_mean(stacked_outputs, axis=0)
+        
+        return y_mean

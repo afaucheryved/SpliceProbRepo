@@ -97,6 +97,7 @@ class ImportanceSplicingSearch:
 
 
 ## ---- ML POV ----
+
 #this is a test 
 
 class SpliceAIModels(tf.keras.Model):
@@ -141,7 +142,6 @@ class SpliceAIModels(tf.keras.Model):
         y_mean = tf.reduce_mean(stacked_outputs, axis=0)
         
         return y_mean
-
 
 def get_gradients(ensemble_model, input_sequence, position, site_type):
     """

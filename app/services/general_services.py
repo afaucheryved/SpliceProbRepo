@@ -8,6 +8,7 @@ from app.domain.spliceia_calculation import calcul_y
 from app.test.global_var import GlobalVar
 from app.schemas.general_schema import GeneticVariant
 from app.errors.errors import InvalidMutationSyntax
+from app.main import my_model
 
 class GenomicServices:
 
@@ -15,7 +16,7 @@ class GenomicServices:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        y = calcul_y({"genome to calcul" : altered}, 10000, specified_models_used = specified_models_used) # y is a tuple[list[int], list[int], list[int]]
+        y = my_model.call(altered) #calcul_y({"genome to calcul" : altered}, 10000, specified_models_used = specified_models_used) # y is a tuple[list[int], list[int], list[int]]
         acceptor=[float(x) for x in y[:, 1].tolist()]
         donor=[float(x) for x in y[:, 2].tolist()]
 

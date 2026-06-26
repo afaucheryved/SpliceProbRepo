@@ -15,8 +15,9 @@ matplotlib.use('TkAgg') #to see the graph
 #local import
 from app.domain.sequence_functions import WindowMutationFunctions
 from app.domain.genomic_analysis import ImportanceSplicingSearch as iss
-from app.domain.genomic_analysis import SpliceAIModels, get_gradients, tf_integrated_gradients
+from app.domain.genomic_analysis import  get_gradients, tf_integrated_gradients
 from app.domain.spliceia_calculation import one_hot_encoder
+from app.main import my_model
 
 #test tools
 def print_dic_lisible(func):
@@ -132,8 +133,6 @@ def read_json_file(path):
 
 sequence = "agttgccaagggagcatatggcaaataattaatgacagtttgctatggcctttctcatagAacatactccatctggccttccgctgctttatcagggtcatctaattatttaggaaatgcAagcagcttcccttagatggcacgttggtggtagctgtatgtgtctgtggggtgtccaggcctgaaacatcaagacccatgacttatcatttgaatagatgtggtacacagtggcagatatagaccccctcatgtccacacaggctttcgtgtgtgctaactccctcgtgcactggaacgcggtaatttcctgtgcttctttccagATCGTGCACAGAACTCTGGCGGCCATGCTGGGTTCCCTTGCAGCACTGGCAGCACTGGCTGTGATTGGCGATgtaagttgtcacagtcccaatccctggcttaccactcagtgggatgtcagctcaaagatgttccaggattcaggctttcgctGgttttttcactattttatatgccacgtccatgtttttgcccaagaaccatgctagaggtAtgaactaacaagctacagcattgaagagtacttttcattaggttttgtcacacactcacAtcccagtggtgtgattcctcatcgtggtggaggaaaggctcctcatgggcatgtttgccTagggctgtggagctgggttgtgatggggctggatctgggtgttggaactagaggggaccGtcctagctggtgcagaaaggtgggagtcagttgggccagggtctgtcctgaagagatcaggaggcccctggagaggcgtgtttggggatgagggtgtcctgtttgg"
 
-
-my_model = SpliceAIModels()
 input_sequence = one_hot_encoder({"genom": sequence})
 
 # it works! -> print(my_model.call(one_hot_encoder({"genom": "acgt"})))
@@ -142,6 +141,8 @@ input_sequence = one_hot_encoder({"genom": sequence})
 # function test zone
 
 #@plot_mutation_importance
+
+"""
 @write_in_json
 def function_test():
     #return np.array([67])
@@ -150,6 +151,8 @@ def function_test():
 @plot_mutation_importance
 def function_test2():
     return read_json_file("app/test/output_gradiant.txt")
-
-function_test() # crash on run
+"""
+#function_test() # crash on run
 #function_test2() # works
+
+print(my_model.call(sequence))

@@ -4,11 +4,14 @@ from fastapi import FastAPI
 #local importation :
 from app.router.delta_router import router as delta_router
 from app.router.simple_router import router as simple_router
+from app.domain.spliceia_calculation import SpliceAIModels
 
 """
 documentation interactive : http://127.0.0.1:8000/docs
 to run this file : fastapi  dev app/main.py
 """
+
+my_model = SpliceAIModels()
 
 app = FastAPI()
 

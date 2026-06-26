@@ -48,8 +48,7 @@ class Scoring:
                         case "euclidian" | "manhattan" | "quadratic":
                             add_value = proba_delta_ad[i]["value"]
                         case "pondered":
-                            print(proba_simple[key][i].values())
-                            add_value = proba_delta_ad[i]["value"]*abs(proba_simple[key][i].values())
+                            add_value = proba_delta_ad[i]["value"]*abs(next(iter(proba_simple[key][i].values())))
                         case _:
                             add_value = 0
                     sum_delta_score.append(add_value)
@@ -57,7 +56,7 @@ class Scoring:
             sum_delta_score = np.array(sum_delta_score)
 
         match method.strip().lower():
-            case "euclidian":
+            case "euclidian" | "pondered":
                 return float(np.sqrt(np.sum(sum_delta_score ** 2)))
             case "manhattan":
                 return float(np.sum(np.abs(sum_delta_score)))

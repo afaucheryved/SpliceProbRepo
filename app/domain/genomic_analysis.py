@@ -25,7 +25,7 @@ class ImportanceSplicingSearch:
 
     def _zona(sequence: genome, 
                 step: int = 5,
-                penality: int = 1,
+                penality: int = 2,
                 threshold: percentage = 20,
                 specified_models_used = {5}) -> list[list[int]]:
         """

@@ -10,6 +10,8 @@ from app.domain.sequence_functions import (AlterationFunctionsByIndex,
                                            WindowMutationFunctions)
 from app.domain.genomic_analysis import (ImportanceSplicingSearch, 
                                          SpliceAIModels)
+from app.domain.calcul_function import (IsValid, 
+                                        Scoring)
 
 class GeneticVariant(BaseModel): # switch to using InternalGeneticVariant for the domain layer
     """
@@ -35,7 +37,8 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                                            RandomAlterationFunctions, 
                                            WindowMutationFunctions, 
                                            ImportanceSplicingSearch, 
-                                           SpliceAIModels): # for domain layer use only
+                                           IsValid, 
+                                           Scoring): # for domain layer use only
     """
         alter-ego of GeneticVariant, for domain layer uses.
         Inherits of all functions from sequence_function and genomic_analysis
@@ -51,7 +54,9 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         RandomAlterationFunctions.__init__(self)
         WindowMutationFunctions.__init__(self)
         ImportanceSplicingSearch.__init__(self)
-        SpliceAIModels.__init__(self)
+        IsValid.__init__(self)
+        Scoring.__init__(self)
+        
         
         if name is not None:
             self.name = name

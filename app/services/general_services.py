@@ -12,18 +12,18 @@ from app.domain.initalize_instances import my_model
 
 class GenomicServices:
 
-    def result_per_seqences(sequence: genome, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
+    def result_per_seqences(self, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        y = my_model.run(sequence, models_used=specified_models_used)[0]
+        y = my_model.run(self.sequence, models_used=specified_models_used)[0]
         
         acceptor=[float(x) for x in y[:, 1].tolist()]
         donor=[float(x) for x in y[:, 2].tolist()]
 
         proba = {
-            "acceptor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(sequence, acceptor))},
-            "donor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(sequence, donor))}
+            "acceptor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(self.sequence, acceptor))},
+            "donor_proba": {i: {b: float(p)} for i, (b, p) in enumerate(zip(self.sequence, donor))}
         }
 
         if print_cmd: print(f"altered sequence : {[p for p in proba]}")
@@ -34,11 +34,11 @@ class GenomicServices:
         if return_json :
             return proba
 
-    def altered_sequence(sequence: genome, mutations: mut)->str:
+    def altered_sequence(self, mutations: mut)->str:
         """
         method altering the sequence with each mutation
         """
-        altered_sequence = sequence
+        altered_sequence = self.sequence
         for mut in mutations:
             # get the position and the new base of the mutation
             if mut !="": #empty mutation -> no change
@@ -54,37 +54,35 @@ class GenomicServices:
 
 class ProbaServices :
 
-    def return_proba_simple(gv: GeneticVariant)-> JSON:
+    def return_proba_simple(self)-> JSON:
         """
         return proba json object for simple analysis
         """
-        altered = GenomicServices.altered_sequence(gv.sequence, gv.mutations)
+        altered = GenomicServices.altered_sequence(self.sequence, self.mutations)
         result = GenomicServices.result_per_seqences(altered)
         result["altered sequence"] = altered
         return result
     
-    def return_proba_delta(gv: GeneticVariant, non_altered_ref: JSON | bool = False, specified_models_used: set[int] | None = None)->JSON:
+    def return_proba_delta(self, non_altered_ref: JSON | bool = False, specified_models_used: set[int] | None = None)->JSON:
         """
         return the json of probability of the altered sequence, with the variation between the two version
         """
-        altered_seq = GenomicServices.altered_sequence(gv.sequence, gv.mutations)
+        altered_seq = GenomicServices.altered_sequence(self.sequence, self.mutations)
 
         non_altered_result = non_altered_ref if non_altered_ref else GenomicServices.result_per_seqences(
-            gv.sequence,
             specified_models_used=specified_models_used
         )
 
         altered_result = GenomicServices.result_per_seqences(
-            altered_seq,
             specified_models_used=specified_models_used
         )
 
         delta_score_result = {"acceptor_proba": {}, "donor_proba": {}}
 
         for key in ("acceptor_proba", "donor_proba"):
-            for i in range(len(gv.sequence)):
+            for i in range(len(self.sequence)):
                 altered_value = altered_result[key][i][altered_seq[i]]
-                delta_value = altered_value - non_altered_result[key][i][gv.sequence[i]]
+                delta_value = altered_value - non_altered_result[key][i][self.sequence[i]]
 
                 delta_score_result[key][i] = {"value": delta_value}
 
@@ -94,6 +92,6 @@ class ProbaServices :
                     delta_score_result[key][i]["delta_proportion_variation"] = -1
 
         delta_score_result["altered sequence"] = altered_seq
-        delta_score_result["name"] = gv.name
+        delta_score_result["name"] = self.name
         return delta_score_result
     

@@ -4,7 +4,7 @@ import traceback
 from pydantic import BaseModel
 
 #local importation
-from app.domain.initalize_instances import my_internal_genetic_variant
+from app.domain.initialize_internal_gv import my_internal_genetic_variant
 from app.schemas.typing import *
 
 router = APIRouter()
@@ -47,25 +47,25 @@ async def delet(p: DeletParameters):
         else:
             raise ValueError("you cannot use both 'length' and 'end' parameters")
     except Exception as e:
-        raise e(f"unexpected exception : {e}")
+        raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
 @router.post("/insert")
 async def insert(p: InsertParameters):
     try:
-        my_internal_genetic_variant.insert(p.pattern, p.index, p.lenght)
+        my_internal_genetic_variant.insert(p.pattern, p.index, p.length) 
     except Exception as e:
-        raise e(f"unexpected exception : {e}")
+        raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
 @router.post("/move")
 async def move(p: MoveParameters):
     try:
         my_internal_genetic_variant.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
     except Exception as e:
-        raise e(f"unexpected exception : {e}")
+        raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
 @router.post("/copypast")
 async def coupy_past(p: CopyPasteParameters):
     try:
         my_internal_genetic_variant.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
     except Exception as e:
-        raise e(f"unexpected exception : {e}")
+        raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")

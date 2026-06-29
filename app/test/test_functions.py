@@ -15,10 +15,10 @@ matplotlib.use('TkAgg') #to see the graph
 #local import
 from app.domain.sequence_functions import WindowMutationFunctions
 from app.domain.genomic_analysis import ImportanceSplicingSearch as iss
-from app.domain.genomic_analysis import  get_gradients, tf_integrated_gradients, ImportanceSplicingSearch
+from app.domain.genomic_analysis import ImportanceSplicingSearch
 from app.domain.spliceia_calculation import one_hot_encoder
-from app.domain.initalize_instances import my_model
-from app.schemas.general_schema import InternalGeneticVariant
+from app.domain.initalize_my_model import my_model
+from app.domain.initialize_internal_gv import my_internal_genetic_variant
 
 #test tools
 def print_dic_lisible(func):
@@ -136,28 +136,7 @@ sequence = "agttgccaagggagcatatggcaaataattaatgacagtttgctatggcctttctcatagAacatact
 
 input_sequence = one_hot_encoder({"genom": sequence})
 
-gv = InternalGeneticVariant(sequence = sequence)
-
-# it works! -> print(my_model.call(one_hot_encoder({"genom": "acgt"})))
-# it works! -> output = get_gradients(my_model, one_hot_encoder({"genom": sequence}), 1, 1)
-
+my_internal_genetic_variant.insert("acgt", 0, 0)
 # function test zone
 
-#@plot_mutation_importance
-
-"""
-@write_in_json
-def function_test():
-    #return np.array([67])
-    return tf_integrated_gradients(my_model, input_sequence, 1, 1)[0]
-
-@plot_mutation_importance
-def function_test2():
-    return read_json_file("app/test/output_gradiant.txt")
-"""
-
-print(gv.pattern_in_zona())
-#function_test() # crash on run
-#function_test2() # works
-
-#print(my_model.call(sequence))
+print(my_internal_genetic_variant.sequence)

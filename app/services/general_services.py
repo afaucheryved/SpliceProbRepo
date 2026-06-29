@@ -6,9 +6,8 @@ import re
 from app.schemas.typing import mut, genome, JSON
 from app.domain.spliceia_calculation import calcul_y
 from app.test.global_var import GlobalVar
-from app.schemas.general_schema import GeneticVariant
 from app.errors.errors import InvalidMutationSyntax
-from app.domain.initalize_instances import my_model
+from app.domain.initalize_my_model import my_model
 
 class GenomicServices:
 

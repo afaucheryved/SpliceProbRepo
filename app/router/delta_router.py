@@ -5,7 +5,7 @@ from app.schemas.general_schema import GeneticVariant
 from app.schemas.typing import JSON
 from app.services.general_services import ProbaServices
 from app.domain.calcul_function import IsValid
-from app.schemas.general_schema import InternalGeneticVariant
+from app.schemas.internal_gv_schema import InternalGeneticVariant
 
 router = APIRouter()
 

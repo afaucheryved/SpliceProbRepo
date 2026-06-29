@@ -18,8 +18,7 @@ class AlterationFunctionsByIndex:
     They return the new sequence.
     """
 
-    @staticmethod
-    def insert(sequence: genome,
+    def insert(self,
                             pattern :str, 
                             index :int,
                             length : str | int = 0 )-> genome:
@@ -41,7 +40,7 @@ class AlterationFunctionsByIndex:
 
         # Determine the replacement length.
         if length == ":":
-            replace_length = len(sequence) - idx0
+            replace_length = len(self.sequence) - idx0
         elif length == 0:
             replace_length = len(pattern)
         else:
@@ -51,12 +50,11 @@ class AlterationFunctionsByIndex:
         if len(pattern) >= replace_length:
             insert = pattern[:replace_length]
         else:
-            insert = pattern + sequence[idx0 + len(pattern):idx0 + replace_length]
+            insert = pattern + self.sequence[idx0 + len(pattern):idx0 + replace_length]
 
-        return sequence[:idx0] + insert + sequence[idx0 + replace_length:]
+        return self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
     
-    @staticmethod
-    def delete(sequence: genome, 
+    def delete(self, 
                        start : int, 
                        end : int | None = None,
                        length: int | str | None = None)-> genome:
@@ -75,18 +73,17 @@ class AlterationFunctionsByIndex:
 
         if length is not None:
             if length == ":":
-                end0 = len(sequence)
+                end0 = len(self.sequence)
             else:
                 end0 = start0 + length
         elif end is None:
-            end0 = len(sequence)
+            end0 = len(self.sequence)
         else:
             end0 = end  # inclusive 1-based end == exclusive 0-based end
 
-        return sequence[:start0] + sequence[end0:]
-    
-    @staticmethod
-    def move(sequence: genome, 
+        return self.sequence[:start0] + self.sequence[end0:]
+
+    def move(self, 
                      start_cc: int,
                      end_cc: int,
                      index_paste: int,
@@ -106,8 +103,8 @@ class AlterationFunctionsByIndex:
         start0 = start_cc - 1   # convert to 0-based
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
-        pattern = sequence[start0:end0]
-        new_sequence = AlterationFunctionsByIndex.delete_pattern(sequence, start_cc, end_cc)
+        pattern = self.sequence[start0:end0]
+        new_sequence = AlterationFunctionsByIndex.delete_pattern(self.sequence, start_cc, end_cc)
 
         # Adjusts index_paste if the paste point was located after the deleted area.
         cut_length = end0 - start0
@@ -115,9 +112,8 @@ class AlterationFunctionsByIndex:
             index_paste -= cut_length
 
         return AlterationFunctionsByIndex.insert_pattern(new_sequence, pattern, index_paste, length_paste)
-    
-    @staticmethod
-    def copy_past(sequence: genome, 
+
+    def copy_past(self, 
                      start_cc: int,
                      end_cc: int, 
                      index_paste: int,
@@ -136,8 +132,8 @@ class AlterationFunctionsByIndex:
         start0 = start_cc - 1
         end0 = end_cc
 
-        pattern = sequence[start0:end0]
-        return AlterationFunctionsByIndex.insert_pattern(sequence, pattern, index_paste, length_paste)
+        pattern = self.sequence[start0:end0]
+        return AlterationFunctionsByIndex.insert_pattern(self.sequence, pattern, index_paste, length_paste)
 
 class AlterationFunctionsByPattern:
 
@@ -147,8 +143,7 @@ class AlterationFunctionsByPattern:
     They return the new sequence.
     """
 
-    @staticmethod
-    def _pattern_to_regex(pattern: str) -> str:
+    def _pattern_to_regex(self, pattern: str) -> str:
         """
         Convert a pattern containing wildcards into a regex pattern.
         "_" matches exactly one ATCG base.
@@ -184,9 +179,8 @@ class AlterationFunctionsByPattern:
                 i += 1
 
         return "".join(regex_parts)
-    
-    @staticmethod
-    def replace(sequence: genome, 
+
+    def replace(self, 
                             old: str, 
                             new: str)-> genome:
         """
@@ -204,10 +198,9 @@ class AlterationFunctionsByPattern:
 
         """
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
-        return re.sub(regex_pattern, new, sequence)
-    
-    @staticmethod
-    def delete(sequence: genome, 
+        return re.sub(regex_pattern, new, self.sequence)
+
+    def delete(self, 
                        pattern: str, 
                        )-> genome:
         """
@@ -221,16 +214,16 @@ class AlterationFunctionsByPattern:
                                 |--|                       |--|                                                    
         """
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(pattern)
-        return re.sub(regex_pattern, "", sequence)
+        return re.sub(regex_pattern, "", self.sequence)
 
 class SequenceFactory:
 
     """
     Functions for generating sequences.
     """
-    
-    @staticmethod
-    def repeat(pattern: str, nbr: int, 
+
+    def repeat(self,
+                pattern: str, nbr: int, 
                 start_pattern: str="", 
                 end_pattern: str="")-> genome:
         """
@@ -243,9 +236,8 @@ class SequenceFactory:
             <start> |              <loop>                   | <end>
         """
         return start_pattern + (pattern * nbr) + end_pattern
-    
-    @staticmethod
-    def merge(sequences: list[genome])-> genome:
+
+    def merge(self, sequences: list[genome])-> genome:
         """
         Return the merged sequence.
 
@@ -262,8 +254,7 @@ class RandomAlterationFunctions:
     Returns randomly mutated ATCG sequences following user-defined probability distributions,
     using probability distributions defined by the ProbaLawsFunctions class.
     """
-    @staticmethod
-    def proba_law(base: str, prob_mat: MutationMatrix) -> str:
+    def proba_law(self, base: str, prob_mat: MutationMatrix) -> str:
         """
         Randomly mutate a single base according to the mutation probability matrix.
 
@@ -284,8 +275,7 @@ class RandomAlterationFunctions:
         # Preserve the original case (lower/upper) of the input base
         return new_base.lower() if base.islower() else new_base
     
-    @staticmethod
-    def mutate_independently(sequence: genome, 
+    def mutate_independently(self, 
                      prob_mat: MutationMatrix
                    )-> genome:
         """
@@ -297,14 +287,13 @@ class RandomAlterationFunctions:
         """
         return "".join(
             RandomAlterationFunctions.proba_law(base, prob_mat)
-            for base in sequence
+            for base in self.sequence
         )
 
 
 class WindowMutationFunctions:
-    
-    @staticmethod
-    def enumerate_window_mutants(sequence: genome,
+
+    def enumerate_window_mutants(self,
                       start: int, end: int, step: int,
                       window: int = 3, 
                       only_different_bases: bool = True, 
@@ -340,9 +329,9 @@ class WindowMutationFunctions:
         nbr_char = 0
 
         for i in range(start, end - window + 1, step):
-            left_seq = sequence[:i]
-            seq = sequence[i:i + window]
-            right_seq = sequence[i + window:]
+            left_seq = self.sequence[:i]
+            seq = self.sequence[i:i + window]
+            right_seq = self.sequence[i + window:]
 
             # Iterate over every possible base combination (a, t, c, g), not just
             # the bases already present in the current window.
@@ -355,7 +344,7 @@ class WindowMutationFunctions:
                     or (not only_different_bases)
                 ):
                     new_sequence = left_seq + perm + right_seq if return_muted_sequence else ""
-                    t_m = tuple_mutation(old=sequence, new=new_sequence)
+                    t_m = tuple_mutation(old=self.sequence, new=new_sequence)
                     output[t_m] = new_sequence
                     nbr_char += len(new_sequence) if return_muted_sequence else len(perm)
 

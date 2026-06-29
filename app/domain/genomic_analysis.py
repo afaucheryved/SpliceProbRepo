@@ -24,8 +24,7 @@ class ImportanceSplicingSearch:
     Returns a dictionary mapping each position to an importance score regarding the splicing process.
     Maybe too long. use gradient instead ?
     """
-    @staticmethod
-    def _zona(sequence: genome, 
+    def _zona(self, 
                 step: int = 5,
                 penality: int = 2,
                 threshold: percentage = 20,
@@ -39,31 +38,31 @@ class ImportanceSplicingSearch:
 
         intervals = []
         mut_score = []
-        non_altered_ref = gs.result_per_seqences(sequence, specified_models_used = specified_models_used)
+        non_altered_ref = gs.result_per_seqences(self.sequence, specified_models_used = specified_models_used)
 
         # try a random mutation on a base every 'step' bases.
-        for base_i in range(0, len(sequence), step):
-            base_mutation = rd.choice([b for b in GlobalVar.BASES if b != sequence[base_i]]) # must change
-            mutation = f">p.{base_i+1}.{sequence[base_i]}>{base_mutation}" # standart .fa file notation
+        for base_i in range(0, len(self.sequence), step):
+            base_mutation = rd.choice([b for b in GlobalVar.BASES if b != self.sequence[base_i]]) # must change
+            mutation = f">p.{base_i+1}.{self.sequence[base_i]}>{base_mutation}" # standart .fa file notation
 
             # deduce the corresponding genetic variant
             gv = GeneticVariant(
                 name = "_", # useless here
                 mutations = [mutation], # only one mutation
-                sequence = sequence ,   
+                sequence = self.sequence ,   
                 altered_sequences = "_", #useless here
                 )
             score_mutation = Scoring.mut(ps.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)
         
-        #--- in the case of a really short sequence
+        #--- in the case of a really short self.sequence
         #plt.plot(mut_score) # debug
         #plt.show()
         if len(mut_score) < 2:
             print("len(mut_score) < 2")
             if len(mut_score) == 1 and mut_score[0] > threshold / 100 * abs(mut_score[0]): # sup  sert à rien ?
                 print("len(mut_score) == 1 and mut_score[0] > threshold / 100 * abs(mut_score[0])")
-                return [[0, len(sequence) - 1]]
+                return [[0, len(self.sequence) - 1]]
             return []
 
         #--- setp 2 : determine intervals with 'ruptures' module
@@ -81,14 +80,13 @@ class ImportanceSplicingSearch:
             if segment_median > mut_score_median + threshold/100 * abs(mut_score_median):
                 # reconversion des indices "mut_score" vers les positions réelles
                 real_start = b_start * step
-                real_end = min(b_end * step, len(sequence) - 1)
+                real_end = min(b_end * step, len(self.sequence) - 1)
                 intervals.append([real_start, real_end])
         print("__________________________")
         return intervals
         
 
-    @staticmethod
-    def pattern_in_zona(gv: GeneticVariant, 
+    def pattern_in_zona(self, 
                         **kwargs) -> dict[set[mut], float] :
         """
         Uses 'enumerate_window_mutants' followed by 'calcul_y' and 'Scoring.mut', 
@@ -96,17 +94,15 @@ class ImportanceSplicingSearch:
         """
         scored_mut = {}
         
-        zona = ImportanceSplicingSearch._zona(gv.sequence, **kwargs)
-        non_altered_ref = ps.return_proba_simple(gv)
+        zona = ImportanceSplicingSearch._zona(self.sequence, **kwargs)
+        non_altered_ref = ps.return_proba_simple(self)
         
         for interval in zona:
-            mut_dict = wmf.enumerate_window_mutants(gv.sequence, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
+            mut_dict = wmf.enumerate_window_mutants(self.sequence, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
             
             for mut in mut_dict:
-                new_gv=gv # a new genetic variant coresponding to the current mutation
-                new_gv.mutations = [mut]
                 
-                proba_delta = ps.return_proba_delta(new_gv, non_altered_ref, {1, 2, 3, 4, 5})
+                proba_delta = ps.return_proba_delta(self, non_altered_ref, {1, 2, 3, 4, 5})
                 mut_score = Scoring.mut(proba_delta, method = "pondered", non_altered_ref = non_altered_ref)
                 
                 scored_mut[mut] = mut_score
@@ -122,7 +118,7 @@ class ImportanceSplicingSearch:
 ## ---- ML POV ----
 
 #this is a test 
-
+""""""
 class SpliceAIModels(tf.keras.Model):
     """
     Represents a Keras model that returns the average of the specified SpliceAI models.
@@ -152,7 +148,7 @@ class SpliceAIModels(tf.keras.Model):
     def call(self, x):
         """
         The forward pass of TensorFlow (equivalent to forward() in PyTorch).
-        x: A TensorFlow tensor representing the DNA sequence [Batch, Length, 4]
+        x: A TensorFlow tensor representing the DNA self.sequence [Batch, Length, 4]
         """
         # Apply each model to the input x
         outputs = [model(x) for model in self.models_list]
@@ -166,46 +162,47 @@ class SpliceAIModels(tf.keras.Model):
         
         return y_mean
 
-def get_gradients(ensemble_model, input_sequence, position, site_type):
-    """
-    Computes the gradient of the targeted output with respect to the input sequence.
+"""
+def get_gradients(ensemble_model, input_self.sequence, position, site_type):
+    """"""
+    Computes the gradient of the targeted output with respect to the input self.sequence.
     site_type: 0 for Acceptor Gain, 1 for Donor Gain, 2 for Acceptor Loss, 3 for Donor Loss.
     site_type: here, only use 1 and 2
-    """
-    # Force TensorFlow to track operations on the DNA sequence
-    sequence = tf.convert_to_tensor(input_sequence, dtype=tf.float32)
+    """"""
+    # Force TensorFlow to track operations on the DNA self.sequence
+    self.sequence = tf.convert_to_tensor(input_self.sequence, dtype=tf.float32)
     with tf.GradientTape() as tape:
-        tape.watch(sequence)
+        tape.watch(self.sequence)
         
-        # Global prediction: Shape [Batch, Sequence_Length, 4]
-        predictions = ensemble_model(sequence)
+        # Global prediction: Shape [Batch, self.sequence_Length, 4]
+        predictions = ensemble_model(self.sequence)
         
         # Extract the specific unique scalar score of the site of interest
         # Example: First element of the batch (0), at the desired position and site type
         target_score = predictions[0, position, site_type]
         
-    # TensorFlow computes the derivative of target_score with respect to sequence
-    gradients = tape.gradient(target_score, sequence)
+    # TensorFlow computes the derivative of target_score with respect to self.sequence
+    gradients = tape.gradient(target_score, self.sequence)
     return gradients
 
 
-def tf_integrated_gradients(ensemble_model, input_sequence, position, site_type, num_steps=100):
-    """
+def tf_integrated_gradients(ensemble_model, input_self.sequence, position, site_type, num_steps=100):
+    """"""
     Implémentation vectorisée d'Integrated Gradients pour SpliceAI sous TensorFlow.
     Batch toutes les étapes d'interpolation en un seul passage GradientTape
     au lieu de num_steps+1 appels séquentiels.
-    """
-    input_sequence = tf.convert_to_tensor(input_sequence, dtype=tf.float32)
+    """"""
+    input_self.sequence = tf.convert_to_tensor(input_self.sequence, dtype=tf.float32)
 
     # 1. Baseline neutre
-    baseline = tf.zeros_like(input_sequence)
+    baseline = tf.zeros_like(input_self.sequence)
 
     # 2. Pas d'interpolation : shape [num_steps+1]
     alphas = tf.linspace(0.0, 1.0, num_steps + 1)
 
     # 3. Construire toutes les séquences interpolées en une seule fois
-    # input_sequence: [1, L, 4] -> on retire la dim batch=1 pour la combiner avec alphas
-    delta = input_sequence - baseline  # [1, L, 4]
+    # input_self.sequence: [1, L, 4] -> on retire la dim batch=1 pour la combiner avec alphas
+    delta = input_self.sequence - baseline  # [1, L, 4]
 
     # reshape alphas pour le broadcasting : [num_steps+1, 1, 1, 1]
     alphas_reshaped = tf.reshape(alphas, (-1, 1, 1, 1))
@@ -231,3 +228,4 @@ def tf_integrated_gradients(ensemble_model, input_sequence, position, site_type,
     integrated_grads = tf.squeeze(delta, axis=0) * mean_gradients  # [L, 4]
 
     return integrated_grads.numpy()
+"""

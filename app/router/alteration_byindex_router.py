@@ -8,17 +8,31 @@ from app.domain.initalize_instances import my_internal_genetic_variant
 
 router = APIRouter()
 
-# one class for each alteration function
+# one BaseModel for each alteration function
 
 class DeletParameters(BaseModel):
     start: int = 0
     end: int | None = None
     length: int | None = None
     
-class InsertPattern(BaseModel):
+class InsertParameters(BaseModel):
     pattern: str = ""
     index: int = 0
     length: int = 0
+
+class MoveParameters(BaseModel):
+    start_cc: int = 0
+    end_cc: int = 0
+    index_paste: int = 0
+    length_past: int = 0
+
+class CopyPasteParameters(BaseModel):
+    start_cc: int = 0
+    end_cc: int = 0
+    index_paste: int = 0
+    length_past: int = 0
+
+# one async post function for each alteration fucntion
 
 @router.post("/delet")
 async def delet(p: DeletParameters):
@@ -35,8 +49,22 @@ async def delet(p: DeletParameters):
         raise e(f"unexpected exception : {e}")
 
 @router.post("/insert")
-async def insert(p: InsertPattern):
+async def insert(p: InsertParameters):
     try:
         my_internal_genetic_variant.insert(p.pattern, p.index, p.lenght)
+    except Exception as e:
+        raise e(f"unexpected exception : {e}")
+
+@router.post("/move")
+async def move(p: MoveParameters):
+    try:
+        my_internal_genetic_variant.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
+    except Exception as e:
+        raise e(f"unexpected exception : {e}")
+
+@router.post("/copypast")
+async def coupy_past(p: CopyPasteParameters):
+    try:
+        my_internal_genetic_variant.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
     except Exception as e:
         raise e(f"unexpected exception : {e}")

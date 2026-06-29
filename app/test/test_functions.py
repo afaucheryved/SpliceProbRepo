@@ -18,6 +18,7 @@ from app.domain.genomic_analysis import ImportanceSplicingSearch as iss
 from app.domain.genomic_analysis import  get_gradients, tf_integrated_gradients, ImportanceSplicingSearch
 from app.domain.spliceia_calculation import one_hot_encoder
 from app.domain.initalize_instances import my_model
+from app.schemas.general_schema import GeneticVariant
 
 #test tools
 def print_dic_lisible(func):
@@ -135,6 +136,8 @@ sequence = "agttgccaagggagcatatggcaaataattaatgacagtttgctatggcctttctcatagAacatact
 
 input_sequence = one_hot_encoder({"genom": sequence})
 
+gv = GeneticVariant(sequence = sequence)
+
 # it works! -> print(my_model.call(one_hot_encoder({"genom": "acgt"})))
 # it works! -> output = get_gradients(my_model, one_hot_encoder({"genom": sequence}), 1, 1)
 
@@ -154,7 +157,7 @@ def function_test2():
 """
 
 def function_test():
-    return ImportanceSplicingSearch._zona(sequence)
+    return ImportanceSplicingSearch.pattern_in_zona(gv, step=5)
 
 print(function_test())
 #function_test() # crash on run

@@ -39,22 +39,20 @@ class Scoring:
 
         The proposed norms are: 'euclidean' (default), 'manhattan', 'pondered' and 'quadratic'.
         """
-        if method :
-            sum_delta_score = []
 
-            for key in ("acceptor_proba", "donor_proba"): #proba
-                proba_delta_ad = proba_delta[key]
-                for i in proba_delta_ad:
-                    match method:
-                        case "euclidian" | "manhattan" | "quadratic":
-                            add_value = proba_delta_ad[i]["value"]
-                        case "pondered":
-                            add_value = proba_delta_ad[i]["value"]*abs(next(iter(proba_simple[key][i].values())))
-                        case _:
-                            add_value = 0
-                    sum_delta_score.append(add_value)
+        for key in ("acceptor_proba", "donor_proba"): #proba
+            proba_delta_ad = proba_delta[key]
+            for i in proba_delta_ad:
+                match method:
+                    case "euclidian" | "manhattan" | "quadratic":
+                        add_value = proba_delta_ad[i]["value"]
+                    case "pondered":
+                        add_value = proba_delta_ad[i]["value"]*abs(next(iter(proba_simple[key][i].values())))
+                    case _:
+                        add_value = 0
+                sum_delta_score.append(add_value)
 
-            sum_delta_score = np.array(sum_delta_score)
+        sum_delta_score = np.array(sum_delta_score)
 
         match method.strip().lower():
             case "euclidian" | "pondered":

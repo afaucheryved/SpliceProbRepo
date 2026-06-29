@@ -1,5 +1,6 @@
 #global import
 import re
+import bisect
 
 #local import
 from app.schemas.typing import *
@@ -64,6 +65,3 @@ class Scoring:
                 return float(np.sqrt(np.mean(sum_delta_score ** 2)))
             case _:
                 raise ValueError(f"ERROR: the method '{method}' is not recognized.")
-
-
-

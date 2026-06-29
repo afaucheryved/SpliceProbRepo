@@ -10,8 +10,10 @@ from pkg_resources import resource_filename
 #local import
 from app.schemas.typing import mut
 from app.schemas.typing import *
-from app.services.general_services import ProbaServices as ps, GenomicServices as gs
-from app.domain.sequence_functions import AlterationFunctionsByIndex as abif
+from app.services.general_services import (ProbaServices as ps,
+                                           GenomicServices as gs)
+from app.domain.sequence_functions import (AlterationFunctionsByIndex as afbi,
+                                           WindowMutationFunctions as wmf)
 from app.domain.calcul_function import Scoring
 from app.test.global_var import GlobalVar
 from app.schemas.general_schema import GeneticVariant
@@ -22,7 +24,7 @@ class ImportanceSplicingSearch:
     Returns a dictionary mapping each position to an importance score regarding the splicing process.
     Maybe too long. use gradient instead ?
     """
-
+    @staticmethod
     def _zona(sequence: genome, 
                 step: int = 5,
                 penality: int = 2,
@@ -86,13 +88,35 @@ class ImportanceSplicingSearch:
         
 
     @staticmethod
-    def pattern_in_zona(sequence: genome, 
-                            zona_intervales: list[list[int]]) -> dict[set[mut], float] :
+    def pattern_in_zona(gv: GeneticVariant, 
+                        **kwargs) -> dict[set[mut], float] :
         """
         Uses 'enumerate_window_mutants' followed by 'calcul_y' and 'Scoring.mut', 
         to identify the patterns most significant for altering the splicing score within the previously identified regions of importance.
         """
-        return
+        scored_mut = {}
+        
+        zona = ImportanceSplicingSearch._zona(gv.sequence, **kwargs)
+        non_altered_ref = ps.return_proba_simple(gv)
+        
+        for interval in zona:
+            mut_dict = wmf.enumerate_window_mutants(gv.sequence, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
+            
+            for mut in mut_dict:
+                new_gv=gv # a new genetic variant coresponding to the current mutation
+                new_gv.mutations = [mut]
+                
+                proba_delta = ps.return_proba_delta(new_gv, non_altered_ref, {1, 2, 3, 4, 5})
+                mut_score = Scoring.mut(proba_delta, method = "pondered", non_altered_ref = non_altered_ref)
+                
+                scored_mut[mut] = mut_score
+                
+        return dict(sorted(scored_mut.items())) # simply returns the most significant mutations
+                
+                
+                
+            
+            
 
 
 ## ---- ML POV ----

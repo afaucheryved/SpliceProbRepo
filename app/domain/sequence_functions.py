@@ -54,7 +54,7 @@ class AlterationFunctionsByIndex:
 
         return self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
     
-    def delete(self, 
+    def delete_by_index(self, 
                        start : int, 
                        end : int | None = None,
                        length: int | str | None = None)-> genome:
@@ -200,7 +200,7 @@ class AlterationFunctionsByPattern:
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
         return re.sub(regex_pattern, new, self.sequence)
 
-    def delete(self, 
+    def delete_by_pattern(self, 
                        pattern: str, 
                        )-> genome:
         """

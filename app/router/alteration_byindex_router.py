@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 #local importation
 from app.domain.initalize_instances import my_internal_genetic_variant
+from app.schemas.typing import *
 
 router = APIRouter()
 
@@ -38,10 +39,10 @@ class CopyPasteParameters(BaseModel):
 async def delet(p: DeletParameters):
     try:
         if p.end is None and p.length is not None:
-            my_internal_genetic_variant.delete(start = p.start, end = p.end)
+            my_internal_genetic_variant.delete_by_index(start = p.start, end = p.end)
             
         elif p.end is not None and p.length is None:
-            my_internal_genetic_variant.delete(start = p.start, length = p.end)
+            my_internal_genetic_variant.delete_by_index(start = p.start, length = p.end)
         
         else:
             raise ValueError("you cannot use both 'length' and 'end' parameters")

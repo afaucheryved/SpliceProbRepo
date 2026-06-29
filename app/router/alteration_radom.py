@@ -24,4 +24,3 @@ async def mutate_independentely(p: MutateIndependentlyParameters):
         my_internal_genetic_variant.mutate_independently(prob_mat=p.prob_mat)
     except Exception as e:
         raise e(f"unexpected exception : {e}")
-    

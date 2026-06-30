@@ -66,7 +66,7 @@ class AlterationFunctionsByIndex:
         If length = ":", then the length is the distance from the index to the end of the sequence.
         Example:
                         
-                                        DELETEEeED
+                                          DELETE
             -> ...atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcg...
                                     |----------------|
                                    start  (length)  end
@@ -108,15 +108,15 @@ class AlterationFunctionsByIndex:
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
         pattern = self.sequence[start0:end0]
-        new_sequence = AlterationFunctionsByIndex.delete_pattern(self.sequence, start_cc, end_cc)
+        new_sequence = AlterationFunctionsByIndex.delete_by_index(self, start_cc, end_cc)
 
         # Adjusts index_paste if the paste point was located after the deleted area.
         cut_length = end0 - start0
         if index_paste > start_cc:
             index_paste -= cut_length
 
-        if no_return: AlterationFunctionsByIndex.insert(self, new_sequence, pattern, index_paste, length_paste, no_return=True)
-        else: return AlterationFunctionsByIndex.insert(self, new_sequence, pattern, index_paste, length_paste, no_return=False)
+        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
+        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
 
     def copy_past(self, 
                      start_cc: int,
@@ -139,7 +139,7 @@ class AlterationFunctionsByIndex:
         end0 = end_cc
 
         pattern = self.sequence[start0:end0]
-        if no_return: self.sequence = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
+        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
         else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
 
 class AlterationFunctionsByPattern:

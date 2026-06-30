@@ -140,5 +140,6 @@ print("\n---------------------------------------------\n")
 
 print("initial: " + my_internal_genetic_variant.sequence)
 my_internal_genetic_variant.insert("aatttttttt", 0, 0)
-my_internal_genetic_variant.copy_past(1, 2, 8, 2)
-print(f"result {my_internal_genetic_variant.sequenc}")
+print("interm" + my_internal_genetic_variant.sequence)
+my_internal_genetic_variant.move(1, 2, 9, 2)
+print(f"result: {my_internal_genetic_variant.sequence}")

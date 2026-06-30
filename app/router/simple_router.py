@@ -18,7 +18,7 @@ async def return_simple_proba_json(gv: GeneticVariant):
     It is for single use requests
     """
     try:
-      if IsValid.mutations(gv.mutations) and IsValid.sequence(gv.sequence):
+      if IsValid.test_mutations(gv.mutations) and IsValid.test_sequence(gv.sequence):
         single_use_gv = InternalGeneticVariant(gv.sequence)
         result = single_use_gv.return_proba_delta()
         return result

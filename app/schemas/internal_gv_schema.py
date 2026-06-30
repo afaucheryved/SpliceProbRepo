@@ -31,10 +31,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         Inherits of all functions from sequence_function and genomic_analysis
     """
     counter = 0
-    def __init__(self, name: str | None = None, mutations: list[mut] = [""], sequence: genome = "", altered_sequences: genome = ""):
-        """
-        
-        """
+    def __init__(self, name: str | None = None, mutations: list[mut] = [""], sequence: genome = ""):
         AlterationFunctionsByIndex.__init__(self)
         AlterationFunctionsByPattern.__init__(self)
         SequenceFactory.__init__(self)
@@ -53,9 +50,9 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
             InternalGeneticVariant.counter+=1
         self.mutations = mutations
         self.sequence = sequence
-        self.altered_sequences = altered_sequences if not altered_sequences is None else self.apply_mutations(sequence, mutations)
+        self.altered_sequences = self.apply_mutations()
     
-    def apply_mutations(self) -> genome:
+    def apply_mutations(self) -> NoReturn:
         """
         Returns the altered sequence corresponding to the input sequence altered by each mutation.
         Each mutation corepond to the following syntaxe : ">p.A.B>C" : the base number A, which was a B become a C. OR : "" (no mutation)
@@ -90,7 +87,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                         f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
                     )
 
-            return new_sequence
+            self.sequence = "".join(new_sequence)
 
         except Exception as e:
             raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e

@@ -303,7 +303,6 @@ class RandomAlterationFunctions:
         if no_return: self.seqence = result
         else: return result
 
-
 class WindowMutationFunctions:
 
     def enumerate_window_mutants(self,

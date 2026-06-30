@@ -11,7 +11,7 @@ class IsValid:
     """
     Cheks input syntax.
     """
-    def mutations(mutations: list[str]) -> bool:
+    def test_mutations(mutations: list[str]) -> bool:
         for s in mutations:
             """
             verifies a mutation syntaxe
@@ -22,7 +22,7 @@ class IsValid:
                 )
         return True
     
-    def _sequence(sequence: str) -> bool:
+    def test_sequence(sequence: str) -> bool:
         """
         Verifies the sequence syntaxe
         """

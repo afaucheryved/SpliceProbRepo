@@ -139,7 +139,8 @@ input_sequence = one_hot_encoder({"genom": sequence})
 print("\n---------------------------------------------\n")
 
 print("initial: " + my_internal_genetic_variant.sequence)
-my_internal_genetic_variant.insert("aatttttttt", 0, 0)
+my_internal_genetic_variant.insert("ttttctttttttttttttttttt", 0, 0)
 print("interm: " + my_internal_genetic_variant.sequence)
-output = my_internal_genetic_variant.merge(["acgt", "acgt"])
-print(f"result: {output}")
+my_internal_genetic_variant.mutations=[">p.1.t>a", ">p.5.c>a"]
+my_internal_genetic_variant.apply_mutations()
+print(f"result: {my_internal_genetic_variant.sequence}")

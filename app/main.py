@@ -8,6 +8,7 @@ from app.router.alteration_byindex_router import router as alteration_byindex_ro
 from app.router.alteration_bypattern_router import router as alteration_bypattern_router
 from app.router.analysis_router import router as analysis_router
 from app.router.get_router import router as get_router
+from app.router.resetgv_router import router as resetgv_router
 
 """
 documentation interactive : http://127.0.0.1:8000/docs
@@ -20,6 +21,7 @@ app = FastAPI()
 
 app.include_router(delta_router)
 app.include_router(simple_router)
+app.include_router(resetgv_router)
 app.include_router(get_router,
                   prefix="/get")
 app.include_router(alteration_byindex_router, 

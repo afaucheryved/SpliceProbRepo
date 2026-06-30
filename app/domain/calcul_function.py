@@ -22,7 +22,7 @@ class IsValid:
                 )
         return True
     
-    def sequence(sequence: str) -> bool:
+    def _sequence(sequence: str) -> bool:
         """
         Verifies the sequence syntaxe
         """

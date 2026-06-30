@@ -136,7 +136,9 @@ sequence = "agttgccaagggagcatatggcaaataattaatgacagtttgctatggcctttctcatagAacatact
 
 input_sequence = one_hot_encoder({"genom": sequence})
 
-my_internal_genetic_variant.insert("acgt", 0, 0)
-# function test zone
+print("\n---------------------------------------------\n")
 
-print(my_internal_genetic_variant.sequence)
+print("initial: " + my_internal_genetic_variant.sequence)
+my_internal_genetic_variant.insert("aatttttttt", 0, 0)
+my_internal_genetic_variant.copy_past(1, 2, 8, 2)
+print(f"result {my_internal_genetic_variant.sequenc}")

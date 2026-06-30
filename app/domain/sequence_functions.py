@@ -7,7 +7,6 @@ import random
 
 #local import
 from app.schemas.typing import *
-from app.domain.proba_laws_functions import ProbaLawsFunctions
 from app.domain.spliceia_calculation import tuple_mutation
 from app.test.global_var import GlobalVar
 
@@ -19,9 +18,10 @@ class AlterationFunctionsByIndex:
     """
 
     def insert(self,
-                            pattern :str, 
-                            index :int,
-                            length : str | int = 0 )-> genome:
+                pattern :str, 
+                index :int,
+                length : str | int = 0, 
+                no_return : bool = True)-> genome | NoReturn:
         """
         Place an ATCG pattern at an index over a specified length of the sequence (replacing the existing bases if length != 0).
         If length = ":", then the length is the distance from the index to the end of the sequence. 
@@ -52,12 +52,14 @@ class AlterationFunctionsByIndex:
         else:
             insert = pattern + self.sequence[idx0 + len(pattern):idx0 + replace_length]
 
-        return self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
+        if no_return: self. sequence = self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
+        else: return self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
     
     def delete_by_index(self, 
                        start : int, 
                        end : int | None = None,
-                       length: int | str | None = None)-> genome:
+                       length: int | str | None = None, 
+                       no_return: bool = True)-> genome | NoReturn:
         """
         DELETEEe the bases beteen the position 'start' and 'end'.
         You can use 'length' parameter instead of 'end'.
@@ -81,13 +83,15 @@ class AlterationFunctionsByIndex:
         else:
             end0 = end  # inclusive 1-based end == exclusive 0-based end
 
-        return self.sequence[:start0] + self.sequence[end0:]
+        if no_return: self.sequence = self.sequence[:start0] + self.sequence[end0:]
+        else: return self.sequence[:start0] + self.sequence[end0:]
 
     def move(self, 
                      start_cc: int,
                      end_cc: int,
                      index_paste: int,
-                     length_paste: str | int = 0)-> genome:
+                     length_paste: str | int = 0, 
+                     no_return: bool = True)-> genome | NoReturn:
         """
         Cut and paste a sequence.
         If length = ":", then the length is the distance from the index to the end of the sequence.
@@ -111,13 +115,15 @@ class AlterationFunctionsByIndex:
         if index_paste > start_cc:
             index_paste -= cut_length
 
-        return AlterationFunctionsByIndex.insert_pattern(new_sequence, pattern, index_paste, length_paste)
+        if no_return: AlterationFunctionsByIndex.insert(self, new_sequence, pattern, index_paste, length_paste, no_return=True)
+        else: return AlterationFunctionsByIndex.insert(self, new_sequence, pattern, index_paste, length_paste, no_return=False)
 
     def copy_past(self, 
                      start_cc: int,
                      end_cc: int, 
                      index_paste: int,
-                     length_paste: str | int = 0)-> genome:
+                     length_paste: str | int = 0, 
+                     no_return: bool = True)-> genome | NoReturn:
         """
         Copy and paste a sequence.
         Example:
@@ -133,7 +139,8 @@ class AlterationFunctionsByIndex:
         end0 = end_cc
 
         pattern = self.sequence[start0:end0]
-        return AlterationFunctionsByIndex.insert_pattern(self.sequence, pattern, index_paste, length_paste)
+        if no_return: self.sequence = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
+        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
 
 class AlterationFunctionsByPattern:
 
@@ -182,7 +189,8 @@ class AlterationFunctionsByPattern:
 
     def replace(self, 
                             old: str, 
-                            new: str)-> genome:
+                            new: str, 
+                            no_return: bool = True)-> genome | NoReturn:
         """
         Replace one nucleotide pattern with another.
         ! -> "_" is a wildcard character (matches exactly one ATCG base).
@@ -198,11 +206,12 @@ class AlterationFunctionsByPattern:
 
         """
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
-        return re.sub(regex_pattern, new, self.sequence)
+        if no_return: self.sequence = re.sub(regex_pattern, new, self.sequence)
+        else: return re.sub(regex_pattern, new, self.sequence)
 
     def delete_by_pattern(self, 
                        pattern: str, 
-                       )-> genome:
+                       no_return: bool = True)-> genome:
         """
         ! -> "_" is a wildcard character (replaces 1 atcg base).
         ! -> "%(n)" is a wildcard character (matches any sequence of up to 'n' ATCG bases).
@@ -213,8 +222,9 @@ class AlterationFunctionsByPattern:
             -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
                                 |--|                       |--|                                                    
         """
-        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(pattern)
-        return re.sub(regex_pattern, "", self.sequence)
+        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(self, pattern)
+        if no_return: self.sequence = re.sub(regex_pattern, "", self.sequence)
+        else : return re.sub(regex_pattern, "", self.sequence)
 
 class SequenceFactory:
 
@@ -276,8 +286,9 @@ class RandomAlterationFunctions:
         return new_base.lower() if base.islower() else new_base
     
     def mutate_independently(self, 
-                     prob_mat: MutationMatrix
-                   )-> genome:
+                     prob_mat: MutationMatrix, 
+                     no_return: bool = True, 
+                   )-> genome | NoReturn:
         """
         Apply the mutation probability matrix independently to each base.
 
@@ -285,10 +296,12 @@ class RandomAlterationFunctions:
 
             If prob_mat[0][1] = 0.01, then an "A" has a 1% chance of becoming a "C".
         """
-        return "".join(
+        result = "".join(
             RandomAlterationFunctions.proba_law(base, prob_mat)
             for base in self.sequence
         )
+        if no_return: self.seqence = result
+        else: return result
 
 
 class WindowMutationFunctions:
@@ -352,3 +365,4 @@ class WindowMutationFunctions:
                         return output
 
         return output
+

@@ -52,7 +52,7 @@ async def delet(p: DeletParameters):
 @router.post("/insert")
 async def insert(p: InsertParameters):
     try:
-        my_internal_genetic_variant.insert(p.pattern, p.index, p.length) 
+        my_internal_genetic_variant.insert(pattern=p.pattern, index=p.index, length=p.length) 
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 

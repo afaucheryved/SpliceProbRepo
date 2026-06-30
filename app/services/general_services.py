@@ -1,12 +1,9 @@
 #general importation
 import json
-import re
 
 #local importation
-from app.schemas.typing import mut, genome, JSON
-from app.domain.spliceia_calculation import calcul_y
+from app.schemas.typing import mut, JSON
 from app.test.global_var import GlobalVar
-from app.errors.errors import InvalidMutationSyntax
 from app.domain.initalize_my_model import my_model
 
 class GenomicServices:
@@ -15,7 +12,11 @@ class GenomicServices:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        y = my_model.run(self.sequence, models_used=specified_models_used)[0]
+        print("----------")
+        print(self)
+        print("----------")
+        
+        y = my_model.run(x_input = self.sequence, models_used=specified_models_used)[0]
         
         acceptor=[float(x) for x in y[:, 1].tolist()]
         donor=[float(x) for x in y[:, 2].tolist()]
@@ -33,12 +34,12 @@ class GenomicServices:
         if return_json :
             return proba
 
-    def altered_sequence(self, mutations: mut)->str:
+    def altered_sequence(self)->str:
         """
         method altering the sequence with each mutation
         """
         altered_sequence = self.sequence
-        for mut in mutations:
+        for mut in self.mutations:
             # get the position and the new base of the mutation
             if mut !="": #empty mutation -> no change
                 position_mutation = int("".join(c for c in mut if c.isdigit()))
@@ -57,8 +58,8 @@ class ProbaServices :
         """
         return proba json object for simple analysis
         """
-        altered = GenomicServices.altered_sequence(self.sequence, self.mutations)
-        result = GenomicServices.result_per_seqences(altered)
+        altered = GenomicServices.altered_sequence(self)
+        result = GenomicServices.result_per_seqences(self)
         result["altered sequence"] = altered
         return result
     

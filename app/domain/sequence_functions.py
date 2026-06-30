@@ -7,7 +7,7 @@ import random
 
 #local import
 from app.schemas.typing import *
-from app.domain.spliceia_calculation import tuple_mutation
+from app.domain.spliceai_calculation import tuple_mutation
 from app.test.global_var import GlobalVar
 
 class AlterationFunctionsByIndex:
@@ -260,10 +260,12 @@ class SequenceFactory:
         return "".join(sequences)
 
 class RandomAlterationFunctions:
+    
     """
     Returns randomly mutated ATCG sequences following user-defined probability distributions,
     using probability distributions defined by the ProbaLawsFunctions class.
     """
+
     def proba_law(self, base: str, prob_mat: MutationMatrix) -> str:
         """
         Randomly mutate a single base according to the mutation probability matrix.

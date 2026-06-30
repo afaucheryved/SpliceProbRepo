@@ -1,4 +1,4 @@
-from app.domain.spliceia_calculation import SpliceAIModels
+from app.domain.spliceai_calculation import SpliceAIModels
 
 my_model = SpliceAIModels()
 

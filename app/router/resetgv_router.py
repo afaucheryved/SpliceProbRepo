@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.domain.initialize_internal_gv import my_internal_genetic_variant
 from app.schemas.typing import *
 from app.schemas.internal_gv_schema import InternalGeneticVariant
-from app.domain.spliceia_calculation import tuple_mutation
+from app.domain.spliceai_calculation import tuple_mutation
 
 router = APIRouter()
 

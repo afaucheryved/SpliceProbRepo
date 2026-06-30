@@ -38,7 +38,7 @@ class ImportanceSplicingSearch:
 
         intervals = []
         mut_score = []
-        non_altered_ref = gs.result_per_seqences(self.sequence, specified_models_used = specified_models_used)
+        non_altered_ref = gs.result_per_seqences(self, specified_models_used = specified_models_used)
 
         # try a random mutation on a base every 'step' bases.
         for base_i in range(0, len(self.sequence), step):
@@ -85,7 +85,6 @@ class ImportanceSplicingSearch:
         print("__________________________")
         return intervals
         
-
     def pattern_in_zona(self, 
                         **kwargs) -> dict[set[mut], float] :
         """
@@ -94,11 +93,11 @@ class ImportanceSplicingSearch:
         """
         scored_mut = {}
         
-        zona = ImportanceSplicingSearch._zona(self.sequence, **kwargs)
-        non_altered_ref = ps.return_proba_simple(self)
+        zona = self._zona(**kwargs)
+        non_altered_ref = self.return_proba_simple()
         
         for interval in zona:
-            mut_dict = wmf.enumerate_window_mutants(self.sequence, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
+            mut_dict = wmf.enumerate_window_mutants(self, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
             
             for mut in mut_dict:
                 
@@ -109,8 +108,6 @@ class ImportanceSplicingSearch:
                 
         return dict(sorted(scored_mut.items())) # simply returns the most significant mutations
                 
-
-
 ## ---- ML POV ----
 
 #this is a test 

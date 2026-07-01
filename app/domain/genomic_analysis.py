@@ -10,8 +10,7 @@ from pkg_resources import resource_filename
 #local import
 from app.schemas.typing import mut
 from app.schemas.typing import *
-from app.services.general_services import (ProbaServices as ps,
-                                           GenomicServices as gs)
+from app.services.general_services import GeneralServices as gs
 from app.domain.sequence_functions import (AlterationFunctionsByIndex as afbi,
                                            WindowMutationFunctions as wmf)
 from app.domain.calcul_function import Scoring
@@ -52,7 +51,7 @@ class ImportanceSplicingSearch:
                 sequence = self.sequence ,   
                 altered_sequences = "_", #useless here
                 )
-            score_mutation = Scoring.mut(ps.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
+            score_mutation = Scoring.mut(gs.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)
         
         #--- in the case of a really short self.sequence
@@ -101,7 +100,7 @@ class ImportanceSplicingSearch:
             
             for mut in mut_dict:
                 
-                proba_delta = ps.return_proba_delta(self, non_altered_ref, {1, 2, 3, 4, 5})
+                proba_delta = gs.return_proba_delta(self, non_altered_ref, {1, 2, 3, 4, 5})
                 mut_score = Scoring.mut(proba_delta, method = "pondered", non_altered_ref = non_altered_ref)
                 
                 scored_mut[mut] = mut_score

@@ -3,7 +3,6 @@ from fastapi import APIRouter
 import traceback
 from app.schemas.general_schema import GeneticVariant
 from app.schemas.typing import JSON
-from app.services.general_services import ProbaServices
 from app.domain.calcul_function import IsValid
 from app.schemas.internal_gv_schema import InternalGeneticVariant
 
@@ -21,7 +20,7 @@ async def return_delta_proba_json(gv: GeneticVariant):
     """
     try:
         if IsValid.test_mutations(gv.mutations) and IsValid.test_sequence(gv.sequence):
-            single_use_gv = InternalGeneticVariant(gv.sequence)
+            single_use_gv = InternalGeneticVariant(sequence=gv.sequence, mutations=gv.mutations)
             result = single_use_gv.return_proba_delta()
             return result
     except Exception as e:

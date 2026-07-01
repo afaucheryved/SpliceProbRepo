@@ -12,8 +12,7 @@ from app.domain.sequence_functions import (AlterationFunctionsByIndex,
 from app.domain.genomic_analysis import ImportanceSplicingSearch
 from app.domain.calcul_function import (IsValid, 
                                         Scoring)
-from app.services.general_services import (ProbaServices, 
-                                           GenomicServices)
+from app.services.general_services import GeneralServices
 
 
 class InternalGeneticVariant(AlterationFunctionsByIndex, 
@@ -24,8 +23,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                                            ImportanceSplicingSearch, 
                                            IsValid, 
                                            Scoring, 
-                                           ProbaServices, 
-                                           GenomicServices): # for domain layer use only
+                                           GeneralServices): # for domain layer use only
     """
         alter-ego of GeneticVariant, for domain layer uses.
         Inherits of all functions from sequence_function and genomic_analysis
@@ -40,8 +38,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         ImportanceSplicingSearch.__init__(self)
         IsValid.__init__(self)
         Scoring.__init__(self)
-        ProbaServices.__init__(self)
-        GenomicServices.__init__(self)
+        GeneralServices.__init__(self)
         
         if name is not None:
             self.name = name
@@ -50,7 +47,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
             InternalGeneticVariant.counter+=1
         self.mutations = mutations
         self.sequence = sequence
-        self.altered_sequences = self.apply_mutations()
+        self.altered_sequence = self.apply_mutations()
     
     def apply_mutations(self) -> NoReturn:
         """
@@ -86,8 +83,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                         f"In apply_mutation() : You can only apply 1 or 0 mutation for each base.\n"
                         f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
                     )
-
-            self.sequence = "".join(new_sequence)
+            self.altered_sequence = "".join(new_sequence)
 
         except Exception as e:
             raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e

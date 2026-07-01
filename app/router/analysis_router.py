@@ -20,6 +20,9 @@ class PatternInZonaParameters(BaseModel): # parameter for the private method : _
 @router.post("/patterninzona")
 async def patterninzona(p: PatternInZonaParameters) -> dict[set[mut], float]:
     try:
-        return my_internal_genetic_variant.pattern_in_zona(step=p.step, penality=p.penality, threshold=p.threshold, specified_models_used=p.specified_models_used)
+        return my_internal_genetic_variant.pattern_in_zona(step=p.step, 
+                                                           penality=p.penality, 
+                                                           threshold=p.threshold, 
+                                                           specified_models_used=p.specified_models_used)
     except Exception as e:
         raise Exception(f"fail to get pattern_in_zona analysis of 'internal genitic variant' : {e}")

@@ -13,9 +13,9 @@ from app.schemas.typing import *
 from app.services.general_services import GeneralServices as gs
 from app.domain.sequence_functions import (AlterationFunctionsByIndex as afbi,
                                            WindowMutationFunctions as wmf)
-from app.domain.calcul_function import Scoring
+from app.domain.calcul_function import IndependentScoring
 from app.test.global_var import GlobalVar
-from app.schemas.general_schema import GeneticVariant
+from app.schemas.independant_gv_schema import IndependentGeneticVariant
 
 class ImportanceSplicingSearch:
     """
@@ -46,14 +46,14 @@ class ImportanceSplicingSearch:
             base_mutation = rd.choice([b for b in GlobalVar.BASES if b != self.sequence[base_i]]) # must change
             mutation = f">p.{base_i+1}.{self.sequence[base_i]}>{base_mutation}" # standart .fa file notation
 
-            # deduce the corresponding genetic variant
-            gv = GeneticVariant(
+            # deduce the corresponding internal genetic variant
+            tempo_gv = IndependentGeneticVariant(
                 name = "_", # useless here
                 mutations = [mutation], # only one mutation
                 sequence = self.sequence ,   
                 altered_sequence = "_", #useless here
                 )
-            score_mutation = Scoring.mut(gs.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
+            score_mutation = IndependentScoring.mut(tempo_gv.return_proba_delta(specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)
         
         #--- in the case of a really short self.sequence
@@ -92,6 +92,11 @@ class ImportanceSplicingSearch:
         Uses 'enumerate_window_mutants' followed by 'calcul_y' and 'Scoring.mut', 
         to identify the patterns most significant for altering the splicing score within the previously identified regions of importance.
         """
+
+        print("---------------------")
+        print(self.__class__.__name__)
+        print("---------------------")
+
         scored_mut = {}
         
         zona = self._zona(**kwargs)
@@ -101,7 +106,7 @@ class ImportanceSplicingSearch:
             mut_dict = wmf.enumerate_window_mutants(self, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
             
             for mut in mut_dict:
-                
+
                 proba_delta = gs.return_proba_delta(self, non_altered_ref, {1, 2, 3, 4, 5})
                 mut_score = Scoring.mut(proba_delta, method = "pondered", non_altered_ref = non_altered_ref)
                 

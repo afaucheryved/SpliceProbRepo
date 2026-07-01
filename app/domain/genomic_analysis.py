@@ -40,7 +40,9 @@ class ImportanceSplicingSearch:
         non_altered_ref = gs.result_per_seqences(self, specified_models_used = specified_models_used)
 
         # try a random mutation on a base every 'step' bases.
-        for base_i in range(0, len(self.sequence), step):
+        for base_i in range(0, 
+                            len(self.sequence), 
+                            step if step!=0 else 1):
             base_mutation = rd.choice([b for b in GlobalVar.BASES if b != self.sequence[base_i]]) # must change
             mutation = f">p.{base_i+1}.{self.sequence[base_i]}>{base_mutation}" # standart .fa file notation
 
@@ -49,7 +51,7 @@ class ImportanceSplicingSearch:
                 name = "_", # useless here
                 mutations = [mutation], # only one mutation
                 sequence = self.sequence ,   
-                altered_sequences = "_", #useless here
+                altered_sequence = "_", #useless here
                 )
             score_mutation = Scoring.mut(gs.return_proba_delta(gv, non_altered_ref, specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)

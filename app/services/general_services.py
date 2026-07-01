@@ -72,7 +72,7 @@ class GeneralServices:
                         f"In apply_mutation() : You can only apply 1 or 0 mutation for each base.\n"
                         f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
                     )
-            self.altered_sequence = "".join(new_sequence)
+            self.sequence = "".join(new_sequence)
 
         except Exception as e:
             raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e

@@ -22,7 +22,7 @@ async def reset_genetic_variant(p: NewGeneticVariantParameters):
     try:
         my_internal_genetic_variant.__init__(name=p.name, 
                                              mutations=p.mutations, 
-                                             sequence=p.sequence,
-                                             altered_sequences=p.altered_sequence)
+                                             sequence=p.sequence
+                                             )
     except Exception as e:
         raise Exception(f"fail to reset the curent 'internal genitic variant' : {e}")

@@ -13,7 +13,7 @@ class GeneticVariant(BaseModel): # switch to using InternalGeneticVariant for th
     name: str
     mutations: list[str] = [""]
     sequence: str = ""
-    altered_sequences: str = ""
+    altered_sequence: str = ""
 
     @field_validator('sequence')
     @classmethod

@@ -114,8 +114,8 @@ class SpliceAIModels(tf.keras.Model):
         valid_models = {1, 2, 3, 4, 5}
         
         models_used_id = {1, 2, 3, 4, 5} if models_used is None else models_used
-        
-        if not models_used_id.issubset(valid_models) and not models_used is None:
+
+        if not set(models_used_id).issubset(valid_models) and not models_used is None:
             raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5} or None.")
         
         outputs = [

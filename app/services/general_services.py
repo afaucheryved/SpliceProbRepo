@@ -81,8 +81,8 @@ class GeneralServices:
         """
         return proba json object for simple analysis
         """
-        altered = self.apply_mutations(self)
-        result = self.result_per_seqences(self)
+        altered = self.apply_mutations()
+        result = self.result_per_seqences()
         result["altered sequence"] = altered
         return result
     
@@ -90,7 +90,7 @@ class GeneralServices:
         """
         return the json of probability of the altered sequence, with the variation between the two version
         """
-        GeneralServices.apply_mutations(self)
+        self.apply_mutations()
         print("------------------return_proba_delta")
         print(self.__class__.__name__) # --> GeneticVariant => this is the problem !!!! it must be InternalGeneticVariant
         print("------------------return_proba_delta")
@@ -194,8 +194,8 @@ class IndependentGeneralServices:
         """
         return proba json object for simple analysis
         """
-        altered = self.apply_mutations(self)
-        result = self.result_per_seqences(self)
+        altered = self.apply_mutations()
+        result = self.result_per_seqences()
         result["altered sequence"] = altered
         return result
     
@@ -203,7 +203,7 @@ class IndependentGeneralServices:
         """
         return the json of probability of the altered sequence, with the variation between the two version
         """
-        IndependentGeneralServices.apply_mutations(self)
+        self.apply_mutations()
         print("------------------return_proba_delta")
         print(self.__class__.__name__) # --> GeneticVariant => this is the problem !!!! it must be InternalGeneticVariant
         print("------------------return_proba_delta")

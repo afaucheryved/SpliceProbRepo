@@ -1,6 +1,7 @@
 #global import
 import re
 import bisect
+import numpy as np
 
 #local import
 from app.schemas.typing import *
@@ -40,6 +41,8 @@ class Scoring:
         The proposed norms are: 'euclidean' (default), 'manhattan', 'pondered' and 'quadratic'.
         """
 
+        sum_delta_score = []
+
         for key in ("acceptor_proba", "donor_proba"): #proba
             proba_delta_ad = proba_delta[key]
             for i in proba_delta_ad:
@@ -75,6 +78,8 @@ class IndependentScoring:
 
         The proposed norms are: 'euclidean' (default), 'manhattan', 'pondered' and 'quadratic'.
         """
+
+        sum_delta_score = []
 
         for key in ("acceptor_proba", "donor_proba"): #proba
             proba_delta_ad = proba_delta[key]

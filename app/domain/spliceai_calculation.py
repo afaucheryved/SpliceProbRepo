@@ -19,7 +19,13 @@ def one_hot_encoder(dico_data: dict[str, genome], context: int =10000)->np.ndarr
         padding = 'N' * (context // 2)
         for seq in dico_data.values():
             print(len(seq))
-        encoded = [one_hot_encode(padding + seq + padding) for seq in dico_data.values()]
+
+        def _prepare_sequence(seq: genome) -> genome:
+            if len(seq) <= context:
+                return seq + 'N'
+            return seq
+
+        encoded = [one_hot_encode(padding + _prepare_sequence(seq) + padding) for seq in dico_data.values()]
         x = np.stack(encoded, axis=0)  # shape: (batch_size, seq_len + context, 4)
         return x
 
@@ -100,7 +106,8 @@ class SpliceAIModels(tf.keras.Model):
         One-hot encode each sequence with flanking CONTEXT, then stack into a batch
         """
         padding = 'N' * (context // 2)
-        encoded = one_hot_encode(padding + sequence + padding)
+        prepared_sequence = sequence + 'N' if len(sequence) <= context else sequence
+        encoded = one_hot_encode(padding + prepared_sequence + padding)
         x_batched = np.expand_dims(encoded, axis=0)
         return x_batched
     

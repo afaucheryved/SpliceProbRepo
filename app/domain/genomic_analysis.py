@@ -103,13 +103,30 @@ class ImportanceSplicingSearch:
         non_altered_ref = self.return_proba_simple()
         
         for interval in zona:
-            mut_dict = wmf.enumerate_window_mutants(self, interval[0], interval[1]) # enumerate for each interval the list of all mutations to try
-            
-            for mut in mut_dict:
+            mut_dict = wmf.enumerate_window_mutants(
+                self,
+                interval[0],
+                interval[1],
+                step=kwargs.get("step", 1),
+            )
 
-                proba_delta = gs.return_proba_delta(self, non_altered_ref, {1, 2, 3, 4, 5})
-                mut_score = Scoring.mut(proba_delta, method = "pondered", non_altered_ref = non_altered_ref)
-                
+            for mut, mutated_sequence in mut_dict.items():
+                tempo_gv = IndependentGeneticVariant(
+                    name="_",
+                    mutations=list(mut),
+                    sequence=self.sequence,
+                    altered_sequence=mutated_sequence,
+                )
+                proba_delta = tempo_gv.return_proba_delta(
+                    non_altered_ref=non_altered_ref,
+                    specified_models_used={1, 2, 3, 4, 5},
+                )
+                mut_score = IndependentScoring.mut(
+                    proba_delta,
+                    method="pondered",
+                    proba_simple=non_altered_ref,
+                )
+
                 scored_mut[mut] = mut_score
                 
         return dict(sorted(scored_mut.items())) # simply returns the most significant mutations

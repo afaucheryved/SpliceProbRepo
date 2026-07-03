@@ -111,7 +111,7 @@ class SpliceAIModels(tf.keras.Model):
         x_batched = np.expand_dims(encoded, axis=0)
         return x_batched
     
-    @wrapp_calcul
+    #@wrapp_calcul
     def run(self, x_input: genome, models_used: set[int] | None = None, keep_gradiant=False):
         """
         The forward pass of TensorFlow (equivalent to forward() in PyTorch).

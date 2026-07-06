@@ -48,6 +48,8 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         self.mutations = mutations
         self.sequence = sequence
         self.altered_sequence = self.apply_mutations()
+        self.simple_proba = self.return_proba_simple()
+        self.proba_delta = self.return_proba_delta()
     
     def apply_mutations(self) -> NoReturn:
         """

@@ -10,7 +10,12 @@ from app.domain.initalize_my_model import my_model
 
 class GeneralServices:
 
-    def result_per_seqences(self, using_altered_seqence: bool = False, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
+    def result_per_seqences(self, 
+                            using_altered_seqence: bool = False, 
+                            write_on_file: bool=False, 
+                            print_cmd: bool=False, 
+                            return_json: bool=True, 
+                            specified_models_used: set[int] | None = None)->JSON | None:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
@@ -86,14 +91,14 @@ class GeneralServices:
         result["altered sequence"] = altered
         return result
     
-    def return_proba_delta(self, non_altered_ref: JSON | None = None, altered_ref: JSON | None = None, specified_models_used: set[int] | None = None)->JSON:
+    def return_proba_delta(self, 
+                           non_altered_ref: JSON | None = None, 
+                           altered_ref: JSON | None = None, 
+                           specified_models_used: set[int] | None = None)->JSON:
         """
         return the json of probability of the altered sequence, with the variation between the two version
         """
         self.apply_mutations()
-        print("------------------return_proba_delta")
-        print(self.__class__.__name__) # --> GeneticVariant => this is the problem !!!! it must be InternalGeneticVariant
-        print("------------------return_proba_delta")
         
         non_altered_result = non_altered_ref if non_altered_ref else self.result_per_seqences(
                                                                                                 specified_models_used=specified_models_used
@@ -123,7 +128,12 @@ class GeneralServices:
     
 class IndependentGeneralServices:
 
-    def result_per_seqences(self, using_altered_seqence: bool = False, write_on_file: bool=False, print_cmd: bool=False, return_json: bool=True, specified_models_used: set[int] | None = None)->JSON | None:
+    def result_per_seqences(self, 
+                            using_altered_seqence: bool = False, 
+                            write_on_file: bool=False, 
+                            print_cmd: bool=False, 
+                            return_json: bool=True, 
+                            specified_models_used: set[int] | None = None)->JSON | None:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
@@ -199,15 +209,15 @@ class IndependentGeneralServices:
         result["altered sequence"] = altered
         return result
     
-    def return_proba_delta(self, non_altered_ref: JSON | None = None, altered_ref: JSON | None = None, specified_models_used: set[int] | None = None)->JSON:
+    def return_proba_delta(self, 
+                           non_altered_ref: JSON | None = None, 
+                           altered_ref: JSON | None = None, 
+                           specified_models_used: set[int] | None = None)->JSON:
         """
         return the json of probability of the altered sequence, with the variation between the two version
         """
         self.apply_mutations()
-        print("------------------return_proba_delta")
-        print(self.__class__.__name__) # --> GeneticVariant => this is the problem !!!! it must be InternalGeneticVariant
-        print("------------------return_proba_delta")
-        
+
         non_altered_result = non_altered_ref if non_altered_ref else self.result_per_seqences(
                                                                                                 specified_models_used=specified_models_used
                                                                                                     )

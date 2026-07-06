@@ -6,7 +6,7 @@ import warnings
 #local importation
 from app.schemas.typing import *
 from app.test.global_var import GlobalVar
-from app.domain.initalize_my_model import my_model
+from app.domain.initialization.initalize_my_model import my_model
 
 class GeneralServices:
 
@@ -243,4 +243,3 @@ class IndependentGeneralServices:
         delta_score_result["altered sequence"] = self.altered_sequence
         delta_score_result["name"] = self.name
         return delta_score_result
-    

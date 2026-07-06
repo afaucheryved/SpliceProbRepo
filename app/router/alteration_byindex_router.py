@@ -4,7 +4,7 @@ import traceback
 from pydantic import BaseModel
 
 #local importation
-from app.domain.initialize_internal_gv import my_internal_genetic_variant
+from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
 from app.schemas.typing import *
 
 router = APIRouter()

@@ -45,7 +45,11 @@ async def get_sequence():
 @router.get("/simpleproba")
 async def get_sequence():
     try:
-        return my_internal_genetic_variant.simple_proba
+        if my_internal_genetic_variant.there_is_change == False:
+            return my_internal_genetic_variant.proba_simple
+        else:
+            my_internal_genetic_variant.proba_simple = my_internal_genetic_variant.return_proba_simple()
+            return my_internal_genetic_variant.proba_simple
     except Exception as e:
         raise Exception(f"Fail to get the static field 'simple_proba' of the current 'internal genitic variant' : {e}")
 
@@ -53,7 +57,11 @@ async def get_sequence():
 @router.get("/delatproba")
 async def get_sequence():
     try:
-        return my_internal_genetic_variant.proba_delta
+        if my_internal_genetic_variant.there_is_change == False:
+            return my_internal_genetic_variant.proba_delta
+        else:
+            my_internal_genetic_variant.proba_delta = my_internal_genetic_variant.return_proba_delta()
+            return my_internal_genetic_variant.proba_delta
     except Exception as e:
         raise Exception(f"Fail to get the static field 'delta_proba' of the current 'internal genitic variant' : {e}")
 

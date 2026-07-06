@@ -18,13 +18,13 @@ class AlterationFunctionsByIndex:
     """
 
     def insert(self,
-                pattern :str, 
-                index :int,
-                length : str | int = 0, 
-                no_return : bool = True)-> genome | NoReturn:
+                pattern: str, 
+                index: int,
+                length: int | str = "default", 
+                no_return: bool = True)-> genome | NoReturn:
         """
-        Place an ATCG pattern at an index over a specified length of the sequence (replacing the existing bases if length != 0).
-        If length = ":", then the length is the distance from the index to the end of the sequence. 
+        Place an ATCG pattern at an index over a specified length of the altered_sequence.
+        If length is not "default" or all, or not specified, the '(lenght)' is 'len(pattern)'. 
         Example:
                 pattern = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", length = 16
 
@@ -36,34 +36,37 @@ class AlterationFunctionsByIndex:
                                     |                            |____
                                     |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
         """
+        self.there_is_change = True
         idx0 = index - 1  # convert to 0-based
 
         # Determine the replacement length.
-        if length == ":":
-            replace_length = len(self.sequence) - idx0
-        elif length == 0:
+        if length == "default":
             replace_length = len(pattern)
+        elif length == "all":
+            replace_length = len(self.altered_sequence)
         else:
             replace_length = length
 
-        # Truncate or pad the pattern so that it has a length of exactly replace_length.
-        if len(pattern) >= replace_length:
-            insert = pattern[:replace_length]
-        else:
-            insert = pattern + self.sequence[idx0 + len(pattern):idx0 + replace_length]
+        new_sequence = (
+            self.altered_sequence[:idx0]
+            + pattern
+            + self.altered_sequence[idx0 + replace_length:]
+        )
 
-        if no_return: self. sequence = self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
-        else: return self.sequence[:idx0] + insert + self.sequence[idx0 + replace_length:]
-    
+        if no_return:
+            self.altered_sequence = new_sequence
+        else:
+            return new_sequence
+            
     def delete_by_index(self, 
                        start : int, 
                        end : int | None = None,
                        length: int | str | None = None, 
                        no_return: bool = True)-> genome | NoReturn:
         """
-        DELETEEe the bases beteen the position 'start' and 'end'.
+        DELETE the bases beteen the position 'start' and 'end'.
         You can use 'length' parameter instead of 'end'.
-        If length = ":", then the length is the distance from the index to the end of the sequence.
+        If length = "all", then the length is the distance from the index to the end of the sequence.
         Example:
                         
                                           DELETE
@@ -71,20 +74,20 @@ class AlterationFunctionsByIndex:
                                     |----------------|
                                    start  (length)  end
         """
+        self.there_is_change = True
         start0 = start - 1  # convert to 0-based
 
         if length is not None:
-            if length == ":":
-                end0 = len(self.sequence)
+            if length == "all":
+                end0 = len(self.altered_sequence)
             else:
                 end0 = start0 + length
         elif end is None:
-            end0 = len(self.sequence)
+            end0 = len(self.altered_sequence)
         else:
             end0 = end  # inclusive 1-based end == exclusive 0-based end
-
-        if no_return: self.sequence = self.sequence[:start0] + self.sequence[end0:]
-        else: return self.sequence[:start0] + self.sequence[end0:]
+        if no_return: self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
+        else: return self.altered_sequence[:start0] + self.altered_sequence[end0:]
 
     def move(self, 
                      start_cc: int,
@@ -104,6 +107,7 @@ class AlterationFunctionsByIndex:
                         
 
         """
+        self.there_is_change = True
         start0 = start_cc - 1   # convert to 0-based
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
@@ -135,6 +139,7 @@ class AlterationFunctionsByIndex:
                         
 
         """
+        self.there_is_change = True
         start0 = start_cc - 1
         end0 = end_cc
 
@@ -205,6 +210,7 @@ class AlterationFunctionsByPattern:
                                 
 
         """
+        self.there_is_change = True
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
         if no_return: self.altered_sequence = re.sub(regex_pattern, new, self.sequence)
         else: return re.sub(regex_pattern, new, self.sequence)
@@ -222,6 +228,7 @@ class AlterationFunctionsByPattern:
             -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
                                 |--|                       |--|                                                    
         """
+        self.there_is_change = True
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(self, pattern)
         if no_return: self.altered_sequence = re.sub(regex_pattern, "", self.sequence)
         else : return re.sub(regex_pattern, "", self.sequence)
@@ -298,6 +305,7 @@ class RandomAlterationFunctions:
 
             If prob_mat[0][1] = 0.01, then an "A" has a 1% chance of becoming a "C".
         """
+        self.there_is_change = True
         result = "".join(
             RandomAlterationFunctions.proba_law(base, prob_mat)
             for base in self.sequence
@@ -339,6 +347,7 @@ class WindowMutationFunctions:
                         --> (">p.5.a>g", ">p.6.t>c", ...)
         Possible improvement: return a `window_mutats` object that stores the base sequence and the set of mutations, and—by design—returns the entire desired mutated sequence upon request.
         """
+        self.there_is_change = True
         output: dict[tuple[mut, ...], genome] = {}
         nbr_char = 0
 

@@ -1,3 +1,26 @@
 1% : [[450, 500], [600, 750], [1050, 1150], [1150, 1300]]
 1% : [[450, 550], [1050, 1250]]
 5  : []
+
+//reste: 
+{
+  "name": "string",
+  "mutations": [
+    ">p.1.a>c",
+    ">p.4.t>a",
+    ">p.10.c>a",
+    ">p.5.a>g",
+    ">p.8.t>c",
+    ">p.15.c>t",
+    ">p.20.g>a",
+    ">p.25.a>t",
+    ">p.30.c>g",
+    ">p.35.t>a",
+    ">p.40.a>c",
+    ">p.50.g>t",
+    ">p.60.c>a",
+    ">p.70.t>g"
+  ],
+  "sequence": "acgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgt",
+  "altered_sequences": ""
+}

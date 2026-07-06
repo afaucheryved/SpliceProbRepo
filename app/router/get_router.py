@@ -24,7 +24,7 @@ def check_initialized(endpoint_funct):
 
 @check_initialized
 @router.get("/sequence")
-async def get_sequence():
+async def get():
     try:
         return my_internal_genetic_variant.sequence
     except Exception as e:
@@ -32,7 +32,7 @@ async def get_sequence():
 
 @check_initialized
 @router.get("/gv")
-async def get_sequence():
+async def get():
     try:
         return {
         k: v for k, v in vars(my_internal_genetic_variant).items()
@@ -43,7 +43,7 @@ async def get_sequence():
 
 @check_initialized
 @router.get("/simpleproba")
-async def get_sequence():
+async def get():
     try:
         if my_internal_genetic_variant.there_is_change == False:
             return my_internal_genetic_variant.proba_simple
@@ -55,7 +55,7 @@ async def get_sequence():
 
 @check_initialized
 @router.get("/delatproba")
-async def get_sequence():
+async def get():
     try:
         if my_internal_genetic_variant.there_is_change == False:
             return my_internal_genetic_variant.proba_delta
@@ -67,7 +67,7 @@ async def get_sequence():
 
 @check_initialized
 @router.get("/mutations")
-async def get_sequence():
+async def get():
     try:
         return my_internal_genetic_variant.mutations
     except Exception as e:
@@ -75,7 +75,7 @@ async def get_sequence():
 
 @check_initialized
 @router.get("/alteredsequence")
-async def get_sequence():
+async def get():
     try:
         return my_internal_genetic_variant.altered_sequence
     except Exception as e:

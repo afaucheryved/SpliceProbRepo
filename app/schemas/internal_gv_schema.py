@@ -13,6 +13,7 @@ from app.domain.genomic_analysis import ImportanceSplicingSearch
 from app.domain.calcul_function import (IsValid, 
                                         Scoring)
 from app.services.general_services import GeneralServices
+from app.errors.errors_and_warnings import CurrentBaseToMutateDoesntMach
 
 
 class InternalGeneticVariant(AlterationFunctionsByIndex, 
@@ -58,23 +59,33 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         ! -> the base 1 is the first one (start to count from 1, according to the biological convention)
         Raise warning if a same base is modified twice or more (because we don't care about the mutations order)
         """
-        pattern = re.compile(r"^>p\.(\d+)\.[A-Za-z]>([A-Za-z])$")
+        pattern = re.compile(r"^>p\.(\d+)\.([A-Za-z])>([A-Za-z])$")
 
         try:
-            # sequence is most likely a str, which is immutable -> work on a list
-            new_sequence = list(self.sequence)
-            check_if_modified = [False for _ in range(len(self.sequence))]
+            # altered_sequence is most likely a str, which is immutable -> work on a list
+            new_sequence = list(self.altered_sequence)
+            check_if_modified = [False for _ in range(len(self.altered_sequence))]
 
             for mut in self.mutations:
                 if mut == "":
-                    continue 
+                    continue
 
                 match = pattern.match(mut)
                 if not match:
                     raise ValueError(f"Invalid mutation syntax: {mut!r}")
 
                 loc_bio = int(match.group(1))
-                new_base = match.group(2)
+                expected_base = match.group(2)
+                new_base = match.group(3)
+
+                current_base = new_sequence[loc_bio - 1]
+                if current_base.upper() != expected_base.upper():
+                    warnings.warn(
+                        f"In apply_mutations() : expected base {expected_base!r} at "
+                        f"position {loc_bio} (biological convention) but found "
+                        f"{current_base!r} instead. Mutation implemented nonetheless.",
+                        CurrentBaseToMutateDoesntMach,
+                    )
 
                 new_sequence[loc_bio - 1] = new_base
 
@@ -82,8 +93,8 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                     check_if_modified[loc_bio - 1] = True
                 else:
                     warnings.warn(
-                        f"In apply_mutation() : You can only apply 1 or 0 mutation for each base.\n"
-                        f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
+                        f"In apply_mutations() : You can only apply 1 or 0 mutation for each base.\n"
+                        f"Modifie the base: {current_base} at: {loc_bio} (biological convention) twice or more."
                     )
             self.altered_sequence = "".join(new_sequence)
 

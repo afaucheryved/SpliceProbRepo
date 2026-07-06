@@ -206,7 +206,7 @@ class AlterationFunctionsByPattern:
 
         """
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
-        if no_return: self.sequence = re.sub(regex_pattern, new, self.sequence)
+        if no_return: self.altered_sequence = re.sub(regex_pattern, new, self.sequence)
         else: return re.sub(regex_pattern, new, self.sequence)
 
     def delete_by_pattern(self, 
@@ -223,7 +223,7 @@ class AlterationFunctionsByPattern:
                                 |--|                       |--|                                                    
         """
         regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(self, pattern)
-        if no_return: self.sequence = re.sub(regex_pattern, "", self.sequence)
+        if no_return: self.altered_sequence = re.sub(regex_pattern, "", self.sequence)
         else : return re.sub(regex_pattern, "", self.sequence)
 
 class SequenceFactory:
@@ -302,7 +302,7 @@ class RandomAlterationFunctions:
             RandomAlterationFunctions.proba_law(base, prob_mat)
             for base in self.sequence
         )
-        if no_return: self.seqence = result
+        if no_return: self.altered_sequence = result
         else: return result
 
 class WindowMutationFunctions:

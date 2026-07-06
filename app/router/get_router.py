@@ -6,7 +6,7 @@ import warnings
 #local importation
 from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
 from app.schemas.typing import *
-from app.errors.errors import NotnitalisedInternalGeneticVariant
+from app.errors.errors_and_warnings import NotItalisedInternalGeneticVariant
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ def check_initialized(endpoint_funct):
         if my_internal_genetic_variant.sequence == "":
                 return endpoint_funct(*args, **kwargs)
         else:
-            warnings.warn(NotnitalisedInternalGeneticVariant())
+            warnings.warn(NotItalisedInternalGeneticVariant())
             return endpoint_funct(*args, **kwargs)
         
 

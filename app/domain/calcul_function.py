@@ -5,7 +5,7 @@ import numpy as np
 
 #local import
 from app.schemas.typing import *
-from app.errors.errors import InvalidMutationSyntax
+from app.errors.errors_and_warnings import InvalidMutationSyntax
 
 
 class IsValid:

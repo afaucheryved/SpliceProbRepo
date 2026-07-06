@@ -30,7 +30,11 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         Inherits of all functions from sequence_function and genomic_analysis
     """
     counter = 0
-    def __init__(self, name: str | None = None, mutations: list[mut] = [""], sequence: genome = ""):
+    def __init__(self, 
+                 name: str | None = None, 
+                 mutations: list[mut] = [""], 
+                 sequence: genome = "", 
+                 altered_sequence: genome = ""):
         AlterationFunctionsByIndex.__init__(self)
         AlterationFunctionsByPattern.__init__(self)
         SequenceFactory.__init__(self)
@@ -48,7 +52,8 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
             InternalGeneticVariant.counter+=1
         self.mutations = mutations
         self.sequence = sequence
-        self.altered_sequence = self.apply_mutations()
+        self.altered_sequence = sequence
+        self.apply_mutations()
         self.simple_proba = self.return_proba_simple()
         self.proba_delta = self.return_proba_delta()
     
@@ -62,7 +67,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         pattern = re.compile(r"^>p\.(\d+)\.([A-Za-z])>([A-Za-z])$")
 
         try:
-            # altered_sequence is most likely a str, which is immutable -> work on a list
+            # altered_sequence -> work on a list
             new_sequence = list(self.altered_sequence)
             check_if_modified = [False for _ in range(len(self.altered_sequence))]
 
@@ -99,4 +104,4 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
             self.altered_sequence = "".join(new_sequence)
 
         except Exception as e:
-            raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e
+            raise Exception(f"Unexpected exception at apply_mutations() at line {e} : {e}") from e

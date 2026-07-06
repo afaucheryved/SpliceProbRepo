@@ -53,7 +53,7 @@ async def get_sequence():
 @router.get("/delatproba")
 async def get_sequence():
     try:
-        return my_internal_genetic_variant.delta_proba
+        return my_internal_genetic_variant.proba_delta
     except Exception as e:
         raise Exception(f"Fail to get the static field 'delta_proba' of the current 'internal genitic variant' : {e}")
 

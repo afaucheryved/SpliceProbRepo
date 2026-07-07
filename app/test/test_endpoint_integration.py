@@ -49,10 +49,16 @@ for qualname, replacement in patching_targets:
     mod = importlib.import_module(module_path)
     setattr(mod, attr_name, replacement)
 
-# Force Redis session to use fakeredis
+# Force Redis session to use fakeredis. Must return the SAME instance on
+# every call (like the real _get_redis_client's caching) -- a lambda that
+# builds a fresh FakeStrictRedis() per call means every set_session_data /
+# get_session_data pair hits a different empty in-memory store, and this
+# patch is never undone, so it silently broke Redis-backed state for every
+# other test module collected in the same pytest session.
 from app.services import redis_session
 import fakeredis
-redis_session._get_redis_client = lambda: fakeredis.FakeStrictRedis(decode_responses=True)
+_fake_redis_client = fakeredis.FakeStrictRedis(decode_responses=True)
+redis_session._get_redis_client = lambda: _fake_redis_client
 
 # Now it is safe to import the FastAPI application.
 from app.main import app

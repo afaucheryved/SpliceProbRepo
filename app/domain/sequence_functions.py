@@ -338,8 +338,10 @@ class RandomAlterationFunctions:
             If prob_mat[0][1] = 0.01 (A -> C), then calling proba_law("A", prob_mat)
             has a 1% chance of returning "C".
         """
-        # Find the row index corresponding to the input base
-        base_index = GlobalVar.BASES.index(base.upper())
+        # Find the row index corresponding to the input base. GlobalVar.BASES
+        # is lowercase ("acgt"); normalize both sides before searching so
+        # this doesn't raise "substring not found" for every call.
+        base_index = GlobalVar.BASES.upper().index(base.upper())
 
         # Get the probability distribution for this base (row of the matrix)
         probabilities = prob_mat[base_index]
@@ -363,7 +365,7 @@ class RandomAlterationFunctions:
         """
         self.there_is_change = True
         result = "".join(
-            RandomAlterationFunctions.proba_law(base, prob_mat)
+            self.proba_law(base, prob_mat)
             for base in self.sequence
         )
         if no_return:

@@ -37,7 +37,7 @@ class ImportanceSplicingSearch:
 
         intervals = []
         mut_score = []
-        non_altered_ref = gs.result_per_seqences(self, specified_models_used = specified_models_used)
+        non_altered_ref = gs.result_per_sequences(self, specified_models_used = specified_models_used)
 
         # try a random mutation on a base every 'step' bases.
         for base_i in range(0, 
@@ -47,11 +47,15 @@ class ImportanceSplicingSearch:
             mutation = f">p.{base_i+1}.{self.sequence[base_i]}>{base_mutation}" # standart .fa file notation
 
             # deduce the corresponding internal genetic variant
+            # `IndependentGeneralServices` applies mutations onto
+            # `altered_sequence` (not `sequence`), so it must start out as a
+            # same-length copy of the base sequence -- a placeholder like "_"
+            # made apply_mutations() index out of range on every call.
             tempo_gv = IndependentGeneticVariant(
                 name = "_", # useless here
                 mutations = [mutation], # only one mutation
-                sequence = self.sequence ,   
-                altered_sequence = "_", #useless here
+                sequence = self.sequence ,
+                altered_sequence = self.sequence,
                 )
             score_mutation = IndependentScoring.mut(tempo_gv.return_proba_delta(specified_models_used={5}), method="pondered", proba_simple=non_altered_ref)
             mut_score.append(score_mutation)

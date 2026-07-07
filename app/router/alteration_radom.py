@@ -12,9 +12,15 @@ router = APIRouter()
 # one BaseModel for each alteration function
 
 class MutateIndependentlyParameters(BaseModel):
-    prob_mat: MutationMatrix = [[1, 0, 0, 0], 
-                                [0, 1, 0, 0], 
-                                [0, 0, 1, 0], 
+    # `MutationMatrix` (app/schemas/typing.py) is a bare numpy NDArray type
+    # alias; Pydantic v2 cannot build a validation schema for it and raising
+    # PydanticSchemaGenerationError at import time, crashing the whole app.
+    # The domain layer (RandomAlterationFunctions.proba_law) only ever does
+    # list indexing / iterates it as weights, so a plain nested list is a
+    # drop-in replacement with an identical JSON wire format.
+    prob_mat: list[list[float]] = [[1, 0, 0, 0],
+                                [0, 1, 0, 0],
+                                [0, 0, 1, 0],
                                 [0, 0, 0, 1]]
     simulated_phenomenon: str | None = None # specific phenomenon to implement by the future simulkated by a specific method or matrix ?
     # Optional session identifier for multi‑user isolation.

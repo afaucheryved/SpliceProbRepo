@@ -77,8 +77,15 @@ class AlteredSequenceTrackerMixin:
         proba = self.result_per_sequences(using_altered_sequence=True)
 
         # SpliceAI mutation label(s) – may be multiple if more than one base
-        # changed between the base and altered sequences.
-        splicing_labels = list(tuple_mutation(base_seq, altered_seq))
+        # changed between the base and altered sequences. ``tuple_mutation``
+        # only supports a same-length, position-wise diff; structural edits
+        # (insert/delete/move/copy-paste/pattern ops) routinely change the
+        # sequence length, so fall back to an empty list instead of raising
+        # and aborting the whole request in that case.
+        if len(base_seq) == len(altered_seq):
+            splicing_labels = list(tuple_mutation(base_seq, altered_seq))
+        else:
+            splicing_labels = []
 
         # Retrieve the existing list of tracked alterations.
         altered_list: List[Dict[str, Any]] = (

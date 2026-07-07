@@ -104,6 +104,40 @@
 ### Potential Features
 - [ ] Expose Acceptor Loss and Donor Loss SpliceAI scores.
 - [ ] Add batching support for multiple sequences in a single request.
-- [ ] Add a web frontend.
+- [x] Add a web frontend — three MVP proposals added under `frontend/` (no-build-step Preact/htm/Chart.js), see `frontend/README.md`.
 - [ ] Dockerize the application.
 - [ ] Add `/health` endpoint.
+
+---
+
+## `fastapi run app/main.py` Startup & Runtime Fixes (2026-07-07)
+
+Prior to this pass, the app could not start at all under `fastapi run`, and
+most endpoints that reached the SpliceAI model or Redis-tracked alterations
+crashed. Root-caused and fixed one bug at a time, verifying with
+`python test_payloads.py --server http://127.0.0.1:8000` after each fix
+until all 11 endpoints (plus all 6 GET accessors) returned 200 with real
+model output.
+
+### 🔴 Startup-blocking bugs (app would not boot)
+- [x] **`alteration_radom.py` Pydantic schema crash**: `MutateIndependentlyParameters.prob_mat: MutationMatrix` used a bare `numpy.typing.NDArray` alias as a Pydantic v2 field type — `PydanticSchemaGenerationError` at import time, crashing the whole app before it could serve a single request. Changed the field type to `list[list[float]]` (identical JSON wire format; the domain layer only ever indexes/iterates it).
+
+### 🔴 Runtime crashes (app started, but requests failed)
+- [x] **`spliceai` package / NumPy 2.x incompatibility**: the third-party `spliceai.utils.one_hot_encode()` calls `np.fromstring(seq, np.int8)` in binary mode, which NumPy has removed (`ValueError: The binary mode of fromstring is removed, use frombuffer instead`). This broke every endpoint that touches the model (`/GetSimpleProb/`, `/GetDeltaScore/`, all alteration endpoints via `_track_alteration`). Added a local, numpy-2-compatible reimplementation in `app/domain/spliceai_calculation.py` (same output, uses `np.frombuffer` instead) and stopped importing the broken upstream function.
+- [x] **`sequence_functions.py` `mutate_independently` unbound method call**: called `RandomAlterationFunctions.proba_law(base, prob_mat)` instead of `self.proba_law(base, prob_mat)` — missing `self` meant `base` was passed as `self` and `prob_mat` was missing entirely (`TypeError`). Fixed to a bound call.
+- [x] **`sequence_functions.py` `proba_law` case mismatch**: looked up `GlobalVar.BASES.index(base.upper())`, but `GlobalVar.BASES = "acgt"` is lowercase and the lookup always used uppercase — `ValueError: substring not found` on every call, so `/mutateindependently` never worked. Fixed to `GlobalVar.BASES.upper().index(base.upper())`.
+- [x] **`genomic_analysis.py` stale method name**: `_zona()` called `gs.result_per_seqences(...)` (old typo) instead of `gs.result_per_sequences(...)` (renamed in an earlier pass, but this call site was missed) — `AttributeError`, breaking `/analysis/patterninzona`. Fixed the call site.
+- [x] **`genomic_analysis.py` `_zona()` placeholder sequence**: constructed `IndependentGeneticVariant(..., altered_sequence="_")` with a literal 1-character placeholder, intending it to be "useless" — but `IndependentGeneralServices` applies mutations onto `altered_sequence`, not `sequence`, so `apply_mutations()` tried to index far past the end of a 1-character list (`IndexError: list assignment index out of range`) on every zone-analysis call. Changed the placeholder to `altered_sequence=self.sequence` (a correctly-sized starting point).
+- [x] **`mixins.py` `_track_alteration()` length-mismatch crash**: unconditionally called `tuple_mutation(base_seq, altered_seq)`, which only supports a same-length, position-wise diff. Any length-changing structural edit (delete, non-overwriting insert/move/copy-paste, pattern delete) raised `ValueError: genomes must have the same length`, breaking `/altbyindex/delete`, `/altbyindex/move`, and similar. Now skips the (purely informational) splicing-label diff when lengths differ instead of raising.
+
+### 🟡 Test-suite bugs found while verifying the fix (not live-server blockers, but were making `pytest app/test/` unreliable)
+- [x] **`test_endpoint_integration.py` Redis monkeypatch leaked across the whole test session**: `redis_session._get_redis_client = lambda: fakeredis.FakeStrictRedis(...)` built a *new* empty fake store on every call (no caching) and was never undone — every `set_session_data`/`get_session_data` pair inside this file's own tests, and in every other test module collected afterward in the same `pytest` run, silently no-opped. Fixed to cache and return a single shared fake client instance.
+- [x] **`test_functions.py` is not an automated test**: it's documented as a manual/script-based visualization tool, but its `test_*.py` name made pytest auto-collect and execute its top-level model calls and `matplotlib.use('TkAgg')` at collection time, crashing collection for the entire suite. Added `pytest.ini` with `addopts = --ignore=app/test/test_functions.py` (run it directly via `python app/test/test_functions.py` instead).
+
+### 🟠 Known remaining test debt (not fixed — out of scope for this pass)
+- [ ] ~43 tests across `test_alteration_functions.py`, `test_analysis_regression.py`, `test_endpoint_integration.py`, and `test_independent_gv.py` still fail. Root cause for most of them (confirmed via `test_independent_gv.py::test_independent_variant_keeps_mutations_as_flat_list`) is that they predate the `_mutations_target_attr` refactor: `IndependentGeneticVariant.apply_mutations()` now writes to `self.altered_sequence`, but these tests still assert against `self.sequence` and/or construct variants with an empty placeholder `altered_sequence`, triggering the same "index out of range" shape of bug fixed above in `genomic_analysis.py`. None of this affects the live server — verified via `python test_payloads.py`, all 11 POST endpoints + all 6 GET accessors return 200 with real SpliceAI output. Fixing the test suite properly is a separate, larger pass (rewrite fixtures against current `_mutations_target_attr` semantics).
+
+### Verification performed
+- `fastapi run app/main.py` boots cleanly (all 5 SpliceAI models load, no startup errors).
+- `python test_payloads.py --server http://127.0.0.1:8000` → **11/11 POST endpoints pass**, **6/6 GET accessors pass**, all with real (non-mocked) SpliceAI predictions.
+- `python -m pytest app/test/` → collection no longer crashes; `test_redis_session.py` now fully passes (16/16); remaining failures are pre-existing test debt documented above.

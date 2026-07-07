@@ -1,6 +1,15 @@
 # Active Context
 
 ## Current Objectives
+`fastapi run app/main.py` now boots and serves correctly end-to-end (verified
+with `python test_payloads.py`, 11/11 endpoints + 6/6 GET accessors passing
+with real SpliceAI output). A three-proposal frontend MVP was added under
+`frontend/`. Remaining open item: ~43 pytest failures are pre-existing test
+debt (stale fixtures predating the `_mutations_target_attr` refactor), not a
+live-server issue — see `docs/ai/progress.md` for the root cause and file
+list.
+
+## Previous Objectives (superseded)
 All tasks from the initial plan are now completed. The project is in a stable, fully-tested state.
 
 ### Completed Tasks
@@ -22,7 +31,9 @@ All tasks from the initial plan are now completed. The project is in a stable, f
 16. ✅ Write proper `README.md` with setup instructions, API usage, Redis configuration
 
 ## Current Working Files
-- All project files are in a stable state.
+- Backend: stable, `fastapi run app/main.py` verified working end-to-end.
+- Frontend: `frontend/` (three MVP proposals, see `frontend/README.md`).
+- Known debt: `docs/ai/progress.md` → "Known remaining test debt" section (~43 stale pytest failures, does not affect the live server).
 
 ## Recent Changes
 | Date | Change | Files Affected |
@@ -66,9 +77,33 @@ All tasks from the initial plan are now completed. The project is in a stable, f
 - Fix spelling inconsistency: `independant_gv_schema.py` uses French spelling
 - Expose Acceptor Loss and Donor Loss SpliceAI scores
 - Add batching support for multiple sequences in a single request
-- Add a web frontend
 - Dockerize the application
 - Add `/health` endpoint
+- Rewrite the ~43 stale tests listed in `docs/ai/progress.md` against current `_mutations_target_attr` semantics
+
+---
+
+## `fastapi run` Startup & Runtime Fix Pass (2026-07-07)
+
+`fastapi run app/main.py` previously crashed at import time and, once that
+was fixed, most model/session-touching endpoints still 500'd. Full root
+cause list, fixes, and verification are in `docs/ai/progress.md` under
+"`fastapi run app/main.py` Startup & Runtime Fixes". Summary of files
+touched:
+
+| File | Fix |
+|------|-----|
+| `app/router/alteration_radom.py` | `prob_mat` field type: bare numpy alias → `list[list[float]]` (fixes Pydantic startup crash) |
+| `app/domain/spliceai_calculation.py` | Local NumPy-2-compatible `one_hot_encode()` replacing the broken upstream `spliceai.utils` one |
+| `app/domain/sequence_functions.py` | `mutate_independently`: unbound → bound `self.proba_law(...)` call; `proba_law`: fixed lowercase/uppercase base lookup mismatch |
+| `app/domain/genomic_analysis.py` | `_zona()`: `result_per_seqences` → `result_per_sequences` typo; placeholder `altered_sequence="_"` → `self.sequence` |
+| `app/domain/mixins.py` | `_track_alteration()`: skip the same-length-only `tuple_mutation()` diff when the sequence length changed, instead of raising |
+| `app/test/test_endpoint_integration.py` | Redis monkeypatch now caches a single fake client instead of leaking a fresh one per call across the whole pytest session |
+| `pytest.ini` (new) | Exclude `test_functions.py` (manual/script tool) from pytest auto-collection |
+
+Verified via `python test_payloads.py --server http://127.0.0.1:8000`
+(11/11 POST + 6/6 GET) and `python -m pytest app/test/` (collection no
+longer crashes; `test_redis_session.py` 16/16).
 
 ---
 

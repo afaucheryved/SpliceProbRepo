@@ -1,5 +1,4 @@
 #general importation
-from spliceai.utils import one_hot_encode
 import numpy as np
 from functools import wraps
 from keras.models import load_model
@@ -11,6 +10,24 @@ import tensorflow as tf
 from app.schemas.typing import genome, mut
 
 #scpliceia
+
+def one_hot_encode(seq: str) -> np.ndarray:
+    """
+    NumPy 2.x compatible reimplementation of ``spliceai.utils.one_hot_encode``.
+    The upstream function calls ``np.fromstring(seq, np.int8)`` in binary
+    mode, which NumPy has removed entirely (raises ``ValueError: The binary
+    mode of fromstring is removed, use frombuffer instead``), crashing every
+    prediction call. Same output for the same input, via ``np.frombuffer``.
+    """
+    mapping = np.asarray([[0, 0, 0, 0],
+                          [1, 0, 0, 0],
+                          [0, 1, 0, 0],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]])
+    seq = seq.upper().replace('A', '\x01').replace('C', '\x02')
+    seq = seq.replace('G', '\x03').replace('T', '\x04').replace('N', '\x00')
+    codes = np.frombuffer(seq.encode('latin-1'), dtype=np.int8)
+    return mapping[codes % 5]
 
 def one_hot_encoder(dico_data: dict[str, genome], context: int =10000)->np.ndarray[np.float32]:
         """

@@ -68,25 +68,25 @@
 ### 🔴 High Priority
 - [x] **`AlterationFunctionsByIndex` still uses `self.sequence` instead of `self.altered_sequence` in `move()` and `copy_past()` methods**: The `pattern` is extracted from `self.sequence` rather than the current `self.altered_sequence`, which means subsequent alterations don't chain correctly.
 
-### 🟡 Typos & Bugs (Plan §5)
-- [ ] **Endpoint typo `/delet`**: Should be `/delete` (but would break clients — maybe keep as alias).
-- [ ] **`length_past` param name**: In `MoveParameters` and `CopyPasteParameters`, field name is `length_past` but seems to be a typo for `length_paste`.
-- [ ] **`get_router.py` endpoint typo `/delatproba`**: Should be `/deltaproba` (but would break clients).
+### 🟡 Typos & Bugs (Plan §5) ✅
+- [x] **Endpoint typo `/delet`**: Both `/delete` and `/delet` aliases registered in routers.
+- [x] **`length_past` param name**: Renamed to `length_paste` in MoveParameters and CopyPasteParameters schemas.
+- [x] **`get_router.py` endpoint typo `/delatproba`**: Both `/deltaproba` and `/delatproba` aliases registered.
 
 ### 🟠 Architectural / Code Quality
-- [ ] **Eliminate code duplication between `GeneralServices` and `IndependentGeneralServices`**: ~95% identical code.
-- [ ] **Eliminate code duplication between `Scoring` and `IndependentScoring`**: Byte-for-byte identical.
+- [x] **Code duplication between `GeneralServices` and `IndependentGeneralServices`**: Eliminated — child only overrides `_mutations_target_attr`.
+- [x] **Code duplication between `Scoring` and `IndependentScoring`**: Eliminated via `IndependentScoring = Scoring` alias.
 - [ ] **Refactor `InternalGeneticVariant` mega-class**: 9-parent multiple inheritance. Consider composition.
 - [ ] **Fix spelling inconsistency**: `independant_gv_schema.py` uses French spelling.
 
-### Testing
-- [ ] Add unit tests for `AlterationFunctionsByIndex` (insert, delete, move, copy_paste).
-- [ ] Add unit tests for `AlterationFunctionsByPattern` (replace, delete with wildcards).
-- [ ] Add tests for Redis session management (`redis_session.py`).
-- [ ] Add integration tests for the FastAPI endpoints.
+### Testing ✅
+- [x] Add unit tests for `AlterationFunctionsByIndex` (insert, delete, move, copy_paste) — `test_alteration_functions.py`.
+- [x] Add unit tests for `AlterationFunctionsByPattern` (replace, delete with wildcards) — `test_alteration_functions.py`.
+- [x] Add tests for Redis session management — `test_redis_session.py`.
+- [x] Add integration tests for the FastAPI endpoints — `test_endpoint_integration.py`.
 
-### Documentation
-- [ ] Write proper `README.md` with setup instructions, API usage, Redis configuration.
+### Documentation ✅
+- [x] Write proper `README.md` with setup instructions, API usage, Redis configuration.
 
 ### Potential Features
 - [ ] Expose Acceptor Loss and Donor Loss SpliceAI scores.

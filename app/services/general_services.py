@@ -9,6 +9,17 @@ from app.test.global_var import GlobalVar
 from app.domain.initialization.initalize_my_model import my_model
 
 class GeneralServices:
+    """
+    Base class providing sequence mutation and scoring services.
+    
+    Subclasses can override `_mutations_target_attr` to control which
+    attribute the mutated sequence is written to (default: ``"sequence"``).
+    """
+
+    #: Name of the attribute to store the mutated sequence in.
+    #: Override to ``"altered_sequence"`` in subclasses that must keep
+    #: the original sequence intact.
+    _mutations_target_attr: str = "sequence"
 
     def result_per_sequences(self, 
                              using_altered_sequence: bool = False, 
@@ -22,7 +33,6 @@ class GeneralServices:
         if using_altered_sequence:
             current_sequence_used = self.altered_sequence
             y = my_model.run(x_input = self.altered_sequence, models_used=specified_models_used)[0]
-            
         else:
             current_sequence_used = self.sequence
             y = my_model.run(x_input = self.sequence, models_used=specified_models_used)[0]
@@ -43,19 +53,20 @@ class GeneralServices:
         if return_json :
             return proba
 
-    def apply_mutations(self) -> NoReturn:
+    def apply_mutations(self) -> None:
         """
-        Returns the altered sequence corresponding to the input sequence altered by each mutation.
-        Each mutation corepond to the following syntaxe : ">p.A.B>C" : the base number A, which was a B become a C. OR : "" (no mutation)
-        ! -> the base 1 is the first one (start to count from 1, according to the biological convention)
-        Raise warning if a same base is modified twice or more (because we don't care about the mutations order)
+        Applies mutations to the sequence and stores the result in the
+        attribute named by ``self._mutations_target_attr``.
+        
+        Each mutation uses the syntax: ``>p.<pos>.<ref>><alt>``.
+        Raises a warning if a base is modified more than once.
         """
+        target = getattr(self, self._mutations_target_attr)
         pattern = re.compile(r"^>p\.(\d+)\.[A-Za-z]>([A-Za-z])$")
 
         try:
-            # sequence is most likely a str, which is immutable -> work on a list
-            new_sequence = list(self.sequence)
-            check_if_modified = [False for _ in range(len(self.sequence))]
+            new_sequence = list(target)
+            check_if_modified = [False for _ in range(len(target))]
 
             for mut in self.mutations:
                 if mut == "":
@@ -75,9 +86,9 @@ class GeneralServices:
                 else:
                     warnings.warn(
                         f"In apply_mutation() : You can only apply 1 or 0 mutation for each base.\n"
-                        f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
+                        f"Modifie the base: {target[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
                     )
-            self.sequence = "".join(new_sequence)
+            setattr(self, self._mutations_target_attr, "".join(new_sequence))
 
         except Exception as e:
             raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e
@@ -88,7 +99,7 @@ class GeneralServices:
         """
         self.apply_mutations()
         result = self.result_per_sequences()
-        result["altered sequence"] = self.sequence
+        result["altered sequence"] = getattr(self, self._mutations_target_attr)
         return result
     
     def return_proba_delta(self, 
@@ -125,49 +136,16 @@ class GeneralServices:
         delta_score_result["altered sequence"] = self.altered_sequence
         delta_score_result["name"] = self.name
         return delta_score_result
-    
+
 
 class IndependentGeneralServices(GeneralServices):
     """
-    Subclass of GeneralServices that stores the mutated result in self.altered_sequence
-    instead of mutating self.sequence directly.
+    Subclass of GeneralServices that stores the mutated result in 
+    ``self.altered_sequence`` instead of mutating ``self.sequence`` directly.
     
-    The only difference from GeneralServices is that apply_mutations() writes to
-    self.altered_sequence rather than self.sequence. All other methods are inherited.
+    The only difference from the parent is the class attribute
+    ``_mutations_target_attr`` set to ``"altered_sequence"``.
+    No method overrides are needed.
     """
 
-    def apply_mutations(self) -> NoReturn:
-        """
-        Same as GeneralServices.apply_mutations() but writes the result to
-        self.altered_sequence instead of self.sequence.
-        """
-        pattern = re.compile(r"^>p\.(\d+)\.[A-Za-z]>([A-Za-z])$")
-
-        try:
-            new_sequence = list(self.sequence)
-            check_if_modified = [False for _ in range(len(self.sequence))]
-
-            for mut in self.mutations:
-                if mut == "":
-                    continue 
-
-                match = pattern.match(mut)
-                if not match:
-                    raise ValueError(f"Invalid mutation syntax: {mut!r}")
-
-                loc_bio = int(match.group(1))
-                new_base = match.group(2)
-
-                new_sequence[loc_bio - 1] = new_base
-
-                if not check_if_modified[loc_bio - 1]:
-                    check_if_modified[loc_bio - 1] = True
-                else:
-                    warnings.warn(
-                        f"In apply_mutation() : You can only apply 1 or 0 mutation for each base.\n"
-                        f"Modifie the base: {self.sequence[loc_bio - 1]} at: {loc_bio} (biological convention) twice or more."
-                    )
-            self.altered_sequence = "".join(new_sequence)  # <-- only diff: writes to altered_sequence
-
-        except Exception as e:
-            raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e
+    _mutations_target_attr = "altered_sequence"

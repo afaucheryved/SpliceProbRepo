@@ -29,18 +29,19 @@ class MoveParameters(BaseModel):
     start_cc: int = 0
     end_cc: int = 0
     index_paste: int = 0
-    length_past: int = 0
+    length_paste: int = 0
     session_id: str | None = None
 
 class CopyPasteParameters(BaseModel):
     start_cc: int = 0
     end_cc: int = 0
     index_paste: int = 0
-    length_past: int = 0
+    length_paste: int = 0
     session_id: str | None = None
 
 # one async post function for each alteration fucntion
 
+@router.post("/delete")
 @router.post("/delet")
 async def delet(p: DeletParameters):
     try:
@@ -79,7 +80,7 @@ async def move(p: MoveParameters):
             mutations=[],
             session_id=p.session_id,
         )
-        gv.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
+        gv.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_paste)
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
@@ -91,6 +92,6 @@ async def coupy_past(p: CopyPasteParameters):
             mutations=[],
             session_id=p.session_id,
         )
-        gv.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
+        gv.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_paste)
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")

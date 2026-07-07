@@ -55,6 +55,7 @@ async def get_simpleproba(session_id: str = Query(..., description="Session ID f
     except Exception as e:
         raise Exception(f"Fail to get the 'simple_proba' of the current 'internal genetic variant' : {e}")
 
+@router.get("/deltaproba")
 @router.get("/delatproba")
 async def get_deltaproba(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:

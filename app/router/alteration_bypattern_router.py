@@ -35,6 +35,7 @@ async def replace(p: ReplaceParameters):
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
     
+@router.post("/delete")
 @router.post("/delet")
 async def delet(p: DeletParameters):
     try:

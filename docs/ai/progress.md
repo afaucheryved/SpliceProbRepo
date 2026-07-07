@@ -66,7 +66,7 @@
 ## TODO / Known Issues
 
 ### 🔴 High Priority
-- [ ] **`AlterationFunctionsByIndex` still uses `self.sequence` instead of `self.altered_sequence` in `move()` and `copy_past()` methods**: The `pattern` is extracted from `self.sequence` rather than the current `self.altered_sequence`, which means subsequent alterations don't chain correctly.
+- [x] **`AlterationFunctionsByIndex` still uses `self.sequence` instead of `self.altered_sequence` in `move()` and `copy_past()` methods**: The `pattern` is extracted from `self.sequence` rather than the current `self.altered_sequence`, which means subsequent alterations don't chain correctly.
 
 ### 🟡 Typos & Bugs (Plan §5)
 - [ ] **Endpoint typo `/delet`**: Should be `/delete` (but would break clients — maybe keep as alias).

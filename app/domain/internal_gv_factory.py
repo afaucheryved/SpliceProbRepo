@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional
 
-from app.domain.internal_gv_schema import InternalGeneticVariant
+from app.schemas.internal_gv_schema import InternalGeneticVariant
 from app.services.redis_session import get_session_data, set_session_data
 
 

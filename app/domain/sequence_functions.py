@@ -118,21 +118,42 @@ class AlterationFunctionsByIndex(AlteredSequenceTrackerMixin):
         start0 = start_cc - 1   # convert to 0-based
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
-        pattern = self.sequence[start0:end0]
-        new_sequence = AlterationFunctionsByIndex.delete_by_index(self, start_cc, end_cc)
+        # Extract the pattern from the CURRENT altered_sequence (not the original)
+        pattern = self.altered_sequence[start0:end0]
+
+        # Delete the cut region directly from altered_sequence
+        cut_length = end0 - start0
+        self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
 
         # Adjusts index_paste if the paste point was located after the deleted area.
-        cut_length = end0 - start0
         if index_paste > start_cc:
             index_paste -= cut_length
 
+        # Determine the replacement length for the insert step.
+        if length_paste == "default" or length_paste == 0 or length_paste == ":":
+            replace_length = len(pattern)
+        elif length_paste == "all":
+            replace_length = len(self.altered_sequence)
+        else:
+            replace_length = length_paste
+
+        idx0 = index_paste - 1  # convert to 0-based
+
         if no_return:
-            AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-            # Track the move mutation
+            self.altered_sequence = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the move mutation (single entry, no double-tracking)
             self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
         else:
-            result = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
-            # Track the move mutation
+            result = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the move mutation (single entry, no double-tracking)
             self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
             return result
 
@@ -157,14 +178,34 @@ class AlterationFunctionsByIndex(AlteredSequenceTrackerMixin):
         start0 = start_cc - 1
         end0 = end_cc
 
-        pattern = self.sequence[start0:end0]
+        # Extract the pattern from the CURRENT altered_sequence (not the original)
+        pattern = self.altered_sequence[start0:end0]
+
+        # Determine the replacement length for the insert step.
+        if length_paste == "default" or length_paste == 0 or length_paste == ":":
+            replace_length = len(pattern)
+        elif length_paste == "all":
+            replace_length = len(self.altered_sequence)
+        else:
+            replace_length = length_paste
+
+        idx0 = index_paste - 1  # convert to 0-based
+
         if no_return:
-            AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-            # Track the copy‑paste mutation
+            self.altered_sequence = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the copy‑paste mutation (single entry, no double-tracking)
             self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
         else:
-            result = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
-            # Track the copy‑paste mutation
+            result = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the copy‑paste mutation (single entry, no double-tracking)
             self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
             return result
 

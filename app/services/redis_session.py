@@ -21,16 +21,34 @@ from typing import Any
 import redis
 
 # ---------------------------------------------------------------------------
-# Helper to obtain a Redis client instance. The client is created on each call
-# – Redis connections are lightweight and the client handles connection pooling
-# internally.
+# Try to use a real Redis client. If that fails (no server running), fall
+# back to ``fakeredis`` so the application can still function without a
+# dedicated Redis process during development / testing.
 # ---------------------------------------------------------------------------
-def _get_redis_client() -> redis.Redis:
+
+def _new_redis_client() -> redis.Redis:
     host = os.getenv("REDIS_HOST", "localhost")
     port = int(os.getenv("REDIS_PORT", "6379"))
     db = int(os.getenv("REDIS_DB", "0"))
     # ``decode_responses=True`` ensures we get strings back instead of bytes.
     return redis.Redis(host=host, port=port, db=db, decode_responses=True)
+
+
+_REDIS_CLIENT: redis.Redis | None = None
+
+
+def _get_redis_client() -> redis.Redis:
+    global _REDIS_CLIENT
+    if _REDIS_CLIENT is not None:
+        return _REDIS_CLIENT
+    try:
+        client = _new_redis_client()
+        client.ping()
+        _REDIS_CLIENT = client
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+        import fakeredis
+        _REDIS_CLIENT = fakeredis.FakeStrictRedis(decode_responses=True)
+    return _REDIS_CLIENT
 
 
 def _namespaced_key(session_id: str, key: str) -> str:

@@ -45,7 +45,7 @@ class TestDeleteByIndex:
         gv.delete_by_index(start=1, length="all")
         assert gv.altered_sequence == ""
 
-    def delete_end_to_end(self, simple_gv):
+    def test_delete_end_to_end(self, simple_gv):
         gv = simple_gv
         original = gv.altered_sequence
         gv.delete_by_index(start=30, length="all")

@@ -29,6 +29,11 @@ class _FakeModel:
         y = np.zeros((batch, seq_len, 3), dtype=np.float32)
         return (y,)
 
+    def _one_hot_encoder(self, sequence, context=10000):
+        """Stub for one-hot encoding used by ``_track_alteration``."""
+        import numpy as np
+        return np.zeros((len(sequence) + 2 * context, 4), dtype=np.float32)
+
 
 patching_targets = [
     # (module_qualname, replaced_with)
@@ -47,7 +52,7 @@ for qualname, replacement in patching_targets:
 # Force Redis session to use fakeredis
 from app.services import redis_session
 import fakeredis
-redis_session._get_client = lambda: fakeredis.FakeStrictRedis()
+redis_session._get_redis_client = lambda: fakeredis.FakeStrictRedis(decode_responses=True)
 
 # Now it is safe to import the FastAPI application.
 from app.main import app

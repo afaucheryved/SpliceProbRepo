@@ -366,8 +366,12 @@ class RandomAlterationFunctions:
             RandomAlterationFunctions.proba_law(base, prob_mat)
             for base in self.sequence
         )
-        if no_return: self.altered_sequence = result
-        else: return result
+        if no_return:
+            self.altered_sequence = result
+            # Track the random mutation
+            self._track_alteration("mutate_independently")
+        else:
+            return result
 
 class WindowMutationFunctions:
 

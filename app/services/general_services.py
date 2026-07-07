@@ -122,7 +122,7 @@ class GeneralServices:
         delta_score_result = {"acceptor_proba": {}, "donor_proba": {}}
 
         for key in ("acceptor_proba", "donor_proba"):
-            for i in range(len(self.sequence)):
+            for i in range(len(self.altered_sequence)):
                 altered_value = altered_result[key][i][self.altered_sequence[i]]
                 delta_value = altered_value - non_altered_result[key][i][self.sequence[i]]
 

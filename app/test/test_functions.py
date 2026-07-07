@@ -16,7 +16,7 @@ matplotlib.use('TkAgg') #to see the graph
 from app.domain.sequence_functions import WindowMutationFunctions
 from app.domain.genomic_analysis import ImportanceSplicingSearch as iss
 from app.domain.genomic_analysis import ImportanceSplicingSearch
-from app.domain.spliceia_calculation import one_hot_encoder
+from app.domain.spliceai_calculation import one_hot_encoder
 from app.domain.initialization.initalize_my_model import my_model
 from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
 

@@ -51,10 +51,10 @@ async def delet(p: DeletParameters):
             mutations=[],
             session_id=p.session_id,
         )
-        if p.end is None and p.length is not None:
+        if p.end is not None and p.length is None:
             gv.delete_by_index(start=p.start, end=p.end)
-        elif p.end is not None and p.length is None:
-            gv.delete_by_index(start=p.start, length=p.end)
+        elif p.end is None and p.length is not None:
+            gv.delete_by_index(start=p.start, length=p.length)
         else:
             raise ValueError("you cannot use both 'length' and 'end' parameters")
     except Exception as e:

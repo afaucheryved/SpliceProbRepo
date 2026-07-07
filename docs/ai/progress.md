@@ -88,6 +88,19 @@
 ### Documentation ✅
 - [x] Write proper `README.md` with setup instructions, API usage, Redis configuration.
 
+---
+
+## Code Review & Audit Fixes (2026-07-07)
+
+### 🔴 Critical Bugs Fixed
+- [x] **`alteration_byindex_router.py` logic bug**: `end`/`length` conditions were swapped — passing `end=None` as `end` parameter and `length=p.end` (wrong variable). Fixed to correctly route `end` and `length` parameters.
+- [x] **`test_endpoint_integration.py` broken Redis monkeypatch**: Referenced non-existent `_get_client` instead of `_get_redis_client`. Fixed to use correct function name.
+- [x] **`test_endpoint_integration.py` `_FakeModel` missing `_one_hot_encoder`**: Any alteration endpoint test that triggers `_track_alteration` would crash because the stub lacked the `_one_hot_encoder` method. Added stub method.
+- [x] **`main.py` missing `alteration_radom` router**: The `/mutateindependently` endpoint was never registered in the FastAPI app. Added router inclusion.
+- [x] **`test_alteration_functions.py` missing `test_` prefix**: `delete_end_to_end` method was not discovered by pytest. Renamed to `test_delete_end_to_end`.
+- [x] **`sequence_functions.py` `mutate_independently` missing tracking**: Did not call `_track_alteration`, inconsistent with all other alteration methods. Added tracking call.
+- [x] **`general_services.py` `return_proba_delta` IndexError**: Iterated `len(self.sequence)` but indexed `self.altered_sequence[i]` — crashes when altered sequence is shorter (after deletions). Fixed to iterate `len(self.altered_sequence)`.
+
 ### Potential Features
 - [ ] Expose Acceptor Loss and Donor Loss SpliceAI scores.
 - [ ] Add batching support for multiple sequences in a single request.

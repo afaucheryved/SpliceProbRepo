@@ -1,82 +1,96 @@
 #global import
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Query
+from fastapi import FastAPI
 from functools import wraps
 import warnings
 
 #local importation
-from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
+from app.domain.internal_gv_factory import create_internal_variant
 from app.schemas.typing import *
 from app.errors.errors_and_warnings import NotItalisedInternalGeneticVariant
 
 router = APIRouter()
 
-# check decorator to see if current 'internal genitic variant' static fields are empty or not.
 
-def check_initialized(endpoint_funct):
-    @wraps
-    def wrapper(*args, **kwargs):
-        if my_internal_genetic_variant.sequence == "":
-                return endpoint_funct(*args, **kwargs)
-        else:
-            warnings.warn(NotItalisedInternalGeneticVariant())
-            return endpoint_funct(*args, **kwargs)
-        
-
-@check_initialized
 @router.get("/sequence")
-async def get():
+async def get_sequence(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
-        return my_internal_genetic_variant.sequence
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        return gv.sequence
     except Exception as e:
-        raise Exception(f"Fail to get the static field 'sequence' of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get the 'sequence' of the current 'internal genetic variant' : {e}")
 
-@check_initialized
 @router.get("/gv")
-async def get():
+async def get_gv(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
         return {
-        k: v for k, v in vars(my_internal_genetic_variant).items()
-        if not (k.startswith('__') or k.startswith('_')) and not callable(v) and not isinstance(v, (staticmethod, classmethod, property))
-    } # considering only static fiels 
+            k: v for k, v in vars(gv).items()
+            if not (k.startswith('__') or k.startswith('_')) and not callable(v) and not isinstance(v, (staticmethod, classmethod, property))
+        }
     except Exception as e:
-        raise Exception(f"Fail to get static fields of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get static fields of the current 'internal genetic variant' : {e}")
 
-@check_initialized
 @router.get("/simpleproba")
-async def get():
+async def get_simpleproba(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
-        if my_internal_genetic_variant.there_is_change == False:
-            return my_internal_genetic_variant.proba_simple
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        if gv.there_is_change == False:
+            return gv.proba_simple
         else:
-            my_internal_genetic_variant.proba_simple = my_internal_genetic_variant.return_proba_simple()
-            return my_internal_genetic_variant.proba_simple
+            gv.proba_simple = gv.return_proba_simple()
+            return gv.proba_simple
     except Exception as e:
-        raise Exception(f"Fail to get the static field 'simple_proba' of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get the 'simple_proba' of the current 'internal genetic variant' : {e}")
 
-@check_initialized
 @router.get("/delatproba")
-async def get():
+async def get_deltaproba(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
-        if my_internal_genetic_variant.there_is_change == False:
-            return my_internal_genetic_variant.proba_delta
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        if gv.there_is_change == False:
+            return gv.proba_delta
         else:
-            my_internal_genetic_variant.proba_delta = my_internal_genetic_variant.return_proba_delta()
-            return my_internal_genetic_variant.proba_delta
+            gv.proba_delta = gv.return_proba_delta()
+            return gv.proba_delta
     except Exception as e:
-        raise Exception(f"Fail to get the static field 'delta_proba' of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get the 'delta_proba' of the current 'internal genetic variant' : {e}")
 
-@check_initialized
 @router.get("/mutations")
-async def get():
+async def get_mutations(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
-        return my_internal_genetic_variant.mutations
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        return gv.mutations
     except Exception as e:
-        raise Exception(f"Fail to get the static field 'mutations' of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get the 'mutations' of the current 'internal genetic variant' : {e}")
 
-@check_initialized
 @router.get("/alteredsequence")
-async def get():
+async def get_alteredsequence(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
     try:
-        return my_internal_genetic_variant.altered_sequence
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        return gv.altered_sequence
     except Exception as e:
-        raise Exception(f"Fail to get the static field 'altered_sequence' of the current 'internal genitic variant' : {e}")
+        raise Exception(f"Fail to get the 'altered_sequence' of the current 'internal genetic variant' : {e}")

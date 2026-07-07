@@ -10,16 +10,16 @@ from app.domain.initialization.initalize_my_model import my_model
 
 class GeneralServices:
 
-    def result_per_seqences(self, 
-                            using_altered_seqence: bool = False, 
-                            write_on_file: bool=False, 
-                            print_cmd: bool=False, 
-                            return_json: bool=True, 
-                            specified_models_used: set[int] | None = None)->JSON | None:
+    def result_per_sequences(self, 
+                             using_altered_sequence: bool = False, 
+                             write_on_file: bool=False, 
+                             print_cmd: bool=False, 
+                             return_json: bool=True, 
+                             specified_models_used: set[int] | None = None)->JSON | None:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        if using_altered_seqence:
+        if using_altered_sequence:
             current_sequence_used = self.altered_sequence
             y = my_model.run(x_input = self.altered_sequence, models_used=specified_models_used)[0]
             
@@ -86,9 +86,9 @@ class GeneralServices:
         """
         return proba json object for simple analysis
         """
-        altered = self.apply_mutations()
-        result = self.result_per_seqences()
-        result["altered sequence"] = altered
+        self.apply_mutations()
+        result = self.result_per_sequences()
+        result["altered sequence"] = self.sequence
         return result
     
     def return_proba_delta(self, 
@@ -100,11 +100,11 @@ class GeneralServices:
         """
         self.apply_mutations()
         
-        non_altered_result = non_altered_ref if non_altered_ref else self.result_per_seqences(
+        non_altered_result = non_altered_ref if non_altered_ref else self.result_per_sequences(
                                                                                                 specified_models_used=specified_models_used
                                                                                                     )
-        altered_result = altered_ref if altered_ref else self.result_per_seqences(
-                                                                                    using_altered_seqence=True,                                                                              
+        altered_result = altered_ref if altered_ref else self.result_per_sequences(
+                                                                                    using_altered_sequence=True,                                                                              
                                                                                     specified_models_used=specified_models_used
                                                                                             
                                                                                         )
@@ -128,8 +128,8 @@ class GeneralServices:
     
 class IndependentGeneralServices:
 
-    def result_per_seqences(self, 
-                            using_altered_seqence: bool = False, 
+    def result_per_sequences(self, 
+                            using_altered_sequence: bool = False, 
                             write_on_file: bool=False, 
                             print_cmd: bool=False, 
                             return_json: bool=True, 
@@ -137,7 +137,7 @@ class IndependentGeneralServices:
         """
         put y results in a json object order by n° of sequences, saved in a .js file
         """
-        if using_altered_seqence:
+        if using_altered_sequence:
             current_sequence_used = self.altered_sequence
             y = my_model.run(x_input = self.altered_sequence, models_used=specified_models_used)[0]
             
@@ -204,9 +204,9 @@ class IndependentGeneralServices:
         """
         return proba json object for simple analysis
         """
-        altered = self.apply_mutations()
-        result = self.result_per_seqences()
-        result["altered sequence"] = altered
+        self.apply_mutations()
+        result = self.result_per_sequences()
+        result["altered sequence"] = self.sequence
         return result
     
     def return_proba_delta(self, 
@@ -218,11 +218,11 @@ class IndependentGeneralServices:
         """
         self.apply_mutations()
 
-        non_altered_result = non_altered_ref if non_altered_ref else self.result_per_seqences(
+        non_altered_result = non_altered_ref if non_altered_ref else self.result_per_sequences(
                                                                                                 specified_models_used=specified_models_used
                                                                                                     )
-        altered_result = altered_ref if altered_ref else self.result_per_seqences(
-                                                                                    using_altered_seqence=True,                                                                              
+        altered_result = altered_ref if altered_ref else self.result_per_sequences(
+                                                                                    using_altered_sequence=True,                                                                              
                                                                                     specified_models_used=specified_models_used
                                                                                             
                                                                                         )

@@ -9,8 +9,9 @@ import random
 from app.schemas.typing import *
 from app.domain.spliceai_calculation import tuple_mutation
 from app.test.global_var import GlobalVar
+from app.domain.mixins import AlteredSequenceTrackerMixin
 
-class AlterationFunctionsByIndex:
+class AlterationFunctionsByIndex(AlteredSequenceTrackerMixin):
 
     """
     This class provides functions that operate on ATCG sequences by index.
@@ -55,6 +56,8 @@ class AlterationFunctionsByIndex:
 
         if no_return:
             self.altered_sequence = new_sequence
+            # Track the insertion mutation
+            self._track_alteration(f"insert:{pattern}@{index}")
         else:
             return new_sequence
             
@@ -86,8 +89,12 @@ class AlterationFunctionsByIndex:
             end0 = len(self.altered_sequence)
         else:
             end0 = end  # inclusive 1-based end == exclusive 0-based end
-        if no_return: self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
-        else: return self.altered_sequence[:start0] + self.altered_sequence[end0:]
+        if no_return:
+            self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
+            # Track the deletion mutation (simple start index label)
+            self._track_alteration(f"delete:{start}")
+        else:
+            return self.altered_sequence[:start0] + self.altered_sequence[end0:]
 
     def move(self, 
                      start_cc: int,
@@ -119,8 +126,15 @@ class AlterationFunctionsByIndex:
         if index_paste > start_cc:
             index_paste -= cut_length
 
-        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+        if no_return:
+            AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
+            # Track the move mutation
+            self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
+        else:
+            result = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+            # Track the move mutation
+            self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
+            return result
 
     def copy_past(self, 
                      start_cc: int,
@@ -144,10 +158,17 @@ class AlterationFunctionsByIndex:
         end0 = end_cc
 
         pattern = self.sequence[start0:end0]
-        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+        if no_return:
+            AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
+            # Track the copy‑paste mutation
+            self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
+        else:
+            result = AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+            # Track the copy‑paste mutation
+            self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
+            return result
 
-class AlterationFunctionsByPattern:
+class AlterationFunctionsByPattern(AlteredSequenceTrackerMixin):
 
     """
     This class provides functions that operate on ATCG sequences.
@@ -192,46 +213,40 @@ class AlterationFunctionsByPattern:
 
         return "".join(regex_parts)
 
-    def replace(self, 
-                            old: str, 
-                            new: str, 
-                            no_return: bool = True)-> genome | NoReturn:
-        """
-        Replace one nucleotide pattern with another.
-        ! -> "_" is a wildcard character (matches exactly one ATCG base).
-        ! -> "%(n)" is a wildcard character (matches any sequence of up to 'n' ATCG bases).
-        Example:
+    def replace(self,
+                old: str,
+                new: str,
+                no_return: bool = True) -> genome | NoReturn:
+        """Replace one nucleotide pattern with another.
 
-            old = "cc_c", new = "aaaa"
-                               REPLACE                  REPLACE
-            -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
-                                |--|                       |--|
-                                aaaa                       aaaa
-                                
-
+        ``_`` matches exactly one ATCG base.
+        ``%(n)`` matches any sequence of up to ``n`` ATCG bases.
         """
         self.there_is_change = True
-        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
-        if no_return: self.altered_sequence = re.sub(regex_pattern, new, self.sequence)
-        else: return re.sub(regex_pattern, new, self.sequence)
+        regex_pattern = self._pattern_to_regex(old)
+        if no_return:
+            self.altered_sequence = re.sub(regex_pattern, new, self.altered_sequence)
+            # Track the replace mutation
+            self._track_alteration(f"replace:{old}->{new}")
+        else:
+            return re.sub(regex_pattern, new, self.altered_sequence)
 
-    def delete_by_pattern(self, 
-                       pattern: str, 
-                       no_return: bool = True)-> genome:
-        """
-        ! -> "_" is a wildcard character (replaces 1 atcg base).
-        ! -> "%(n)" is a wildcard character (matches any sequence of up to 'n' ATCG bases).
-        Example:
+    def delete_by_pattern(self,
+                           pattern: str,
+                           no_return: bool = True) -> genome:
+        """Delete a pattern from the sequence.
 
-            pattern = "cc_c"
-                               DELETE                     DELETE
-            -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
-                                |--|                       |--|                                                    
+        ``_`` matches exactly one ATCG base.
+        ``%(n)`` matches any sequence of up to ``n`` ATCG bases.
         """
         self.there_is_change = True
-        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(self, pattern)
-        if no_return: self.altered_sequence = re.sub(regex_pattern, "", self.sequence)
-        else : return re.sub(regex_pattern, "", self.sequence)
+        regex_pattern = self._pattern_to_regex(pattern)
+        if no_return:
+            self.altered_sequence = re.sub(regex_pattern, "", self.altered_sequence)
+            # Track the delete‑by‑pattern mutation
+            self._track_alteration(f"delete_by_pattern:{pattern}")
+        else:
+            return re.sub(regex_pattern, "", self.altered_sequence)
 
 class SequenceFactory:
 

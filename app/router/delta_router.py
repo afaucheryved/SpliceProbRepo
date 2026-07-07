@@ -20,8 +20,17 @@ async def return_delta_proba_json(gv: GeneticVariant):
     """
     try:
         if IsValid.test_mutations(gv.mutations) and IsValid.test_sequence(gv.sequence):
-            single_use_gv = InternalGeneticVariant(sequence=gv.sequence, mutations=gv.mutations)
-            result = single_use_gv.return_proba_delta()
+            # Use the factory to obtain a session‑aware variant.
+            from app.domain.internal_gv_factory import create_internal_variant
+
+            gv_instance = create_internal_variant(
+                sequence=gv.sequence,
+                mutations=gv.mutations,
+                session_id=gv.session_id,
+            )
+            result = gv_instance.return_proba_delta()
+            # Include the session identifier for the client.
+            result["session_id"] = gv_instance.session_id
             return result
     except Exception as e:
         traceback.print_exc()  # print in cmd

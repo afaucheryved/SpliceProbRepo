@@ -19,12 +19,12 @@ class should invoke ``self._track_alteration(human_label)``. The method will:
 5. Append a JSON‑serialisable entry to the session‑scoped ``altered_sequences``
    list and update the ``current_altered_sequence`` key for subsequent calls.
 """
-
+#global import
 from __future__ import annotations
-
 import uuid
 from typing import Any, List, Dict
 
+#local import
 from app.services.redis_session import get_session_data, set_session_data
 from app.domain.initialization.initalize_my_model import my_model
 from app.domain.spliceai_calculation import tuple_mutation

@@ -53,11 +53,23 @@ touch application code.
 1. Analyze the user's request against the current architecture and brief.
 2. Decompose it into granular, atomic, independently-completable tasks. A
    task is atomic if a single Worker session can finish it well within the
-   1/3 context guardrail (§3).
+   1/3 context guardrail (§3) — concretely, under ~25 tool calls (see §3's
+   counter). As a sizing heuristic: a task that will clearly need more than
+   ~4-5 files touched, or that hinges on a genuinely open design decision
+   (e.g. "how should this be represented in the data model" with more than
+   one defensible answer), is not atomic — split it into a smaller
+   decide/design task followed by a separate implementation task, rather
+   than handing one oversized task to a Worker and hoping it fits. If you
+   can't tell whether a task will fit, split it — an extra small task costs
+   far less than a Worker hitting the guardrail mid-implementation and
+   leaving the code in a half-done state for the next session to untangle.
 3. Write/update the backlog in `docs/ai/progress.md`, using its existing
    checklist format: `- [ ] **Task N — Title**: description`. Each task
    must state its scope, the files/modules it touches, and any dependency
-   on other tasks (explicitly name the blocking task).
+   on other tasks (explicitly name the blocking task). Add new tasks under
+   the active backlog section at the **top** of the file — do not bury
+   them after the historical/reference material below the
+   "Reference: Feature Catalog & Historical Fix Log" divider.
 4. If the request conflicts with something already documented in
    `architecture.md` (a known constraint, an already-resolved issue, an
    open architectural debt), say so in the task description instead of
@@ -92,21 +104,51 @@ completely, then stop.
    endpoint/UI smoke test, etc.) before considering it implementation-complete.
 4. Do **not** change the task's checkbox state (`[DONE]`/`[FAILED]`) —
    that is the Judge's job. You may append a short implementation note
-   under the task (e.g. "Implemented, pending review — touched
-   `app/router/x.py`") to help the Judge.
+   under the task **in `docs/ai/progress.md`, and only there** (e.g.
+   "Implemented, pending review — touched `app/router/x.py`") to help the
+   Judge. Do not also write the same note into `active_context.md` — see
+   the wrap-up steps below for what that file is actually for.
 
 **Constraints — CONTEXT WINDOW GUARDRAIL (1/3 RULE), non-negotiable:**
-- Monitor your token/context usage continuously throughout the session.
-- The instant you estimate you have consumed roughly **1/3 (33%)** of the
-  maximum context window, **STOP IMMEDIATELY** — even mid-task, even
-  mid-file-edit if it can be left in a coherent state.
-- Do not start a new sub-task once that threshold is reached.
-- Before ending the session, in this exact order:
+
+LLMs (especially lightweight/"flash" agents) cannot reliably introspect
+their own token usage — "estimate roughly 33%" is not a checkable
+instruction. Use this **tool-call counter** instead: it requires no
+self-estimation, only counting a running total you can always get exactly
+right.
+
+- Keep a running count of every **context-heavy** tool call you make this
+  session: Read, Edit, Write, Bash, grep/search, and any agent/subagent
+  dispatch. Do **not** count TaskCreate/TaskUpdate/TaskList calls — their
+  results are a couple of lines and don't meaningfully consume context;
+  counting them would trigger the guardrail on administrative bookkeeping
+  rather than actual work.
+- **At tool call #20:** stop opening new files or starting new sub-steps.
+  Finish only what's already in progress, then move straight to the
+  wrap-up steps below.
+- **At tool call #30:** stop immediately, even mid-file-edit if it can be
+  left in a coherent state, and move to the wrap-up steps below.
+- These numbers are calibrated from real sessions in this project (a
+  single-concept, few-file task typically finishes in 10–20 calls; tasks
+  that blow past 30 are almost always trying to do too much at once — see
+  the Planner's atomicity guidance in §2). If a task you're given
+  routinely needs more than ~25 calls to do properly, that's a signal the
+  task should have been split smaller — say so in your handoff note
+  instead of just running longer next time.
+- Do not start a new sub-task once either threshold is reached.
+
+**Wrap-up steps, in this exact order:**
   1. Update `docs/ai/progress.md` with what was actually achieved (partial
-     or complete).
-  2. Update `docs/ai/active_context.md` with the exact stopping point:
-     what's done, what's left, any blockers or decisions the next Worker
-     session needs to know.
+     or complete) — this is the **only** place implementation detail goes.
+     Append a note under the task itself; do not touch its checkbox.
+  2. Update `docs/ai/active_context.md` with a **short pointer only** —
+     which task/file you stopped in and the single next action, in a few
+     lines. It must never duplicate the detail already written in
+     `progress.md` in step 1 — if you catch yourself writing the same
+     paragraph twice, delete it from `active_context.md` and just
+     reference `progress.md`. (Past sessions have written near-identical
+     multi-paragraph write-ups into both files — pure wasted tokens for
+     every session that reads both afterward. Don't repeat that.)
   3. Explicitly tell the user to reset/start a new session to continue.
 
 ## 4. ROLE: `[JUDGE]` — Lead QA Engineer & Auditor
@@ -124,7 +166,16 @@ past mistakes, close out finished work, and commit.
 **Workflow:**
 1. Review the code the Worker wrote: correctness, regressions, consistency
    with `docs/ai/architecture.md`.
-2. Run the test suite and any relevant smoke tests.
+2. Run the test suite and any relevant smoke tests. For any specific claim
+   the Worker's note makes ("verified X", "N/N tests pass", "reproduced
+   the bug and confirmed it's fixed"), reproduce it **independently** —
+   re-run their exact tests, but also construct at least one case they
+   didn't: a different input, an adjacent code path, an operation variant
+   they didn't try. A Worker's own repro only proves the one case it
+   covers; bugs in this codebase have repeatedly turned out to be "works
+   for the tested case, still broken for the untested one next to it" (see
+   `docs/ai/audits_history.md` for examples). Never mark `[DONE]` on the
+   strength of the Worker's report alone.
 3. Branch on the outcome, per task:
    - **Bug/regression found:** document it in `docs/ai/audits_history.md`
      (what broke, why, root cause if known). Mark the task `[FAILED]` in

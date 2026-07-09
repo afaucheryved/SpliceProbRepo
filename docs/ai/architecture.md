@@ -208,13 +208,190 @@ Custom type aliases used throughout:
 - `percentage` = `int`
 
 ### 9. Frontend Layer (`frontend/`)
-Three alternative frontend MVPs consuming the API above, switchable at runtime via a 3-position toggle. No build step — plain ES modules with Preact + `htm` + Chart.js loaded from a CDN at runtime (no `package.json`/`node_modules`).
-- `frontend/serve.py` — stdlib-only static file server that also reverse-proxies API paths to the FastAPI backend, purely to avoid CORS (the backend registers no CORS middleware) without modifying backend code.
-- `frontend/src/views/pipeline/` — **Pipeline**: CyberChef-style drag-and-drop recipe of blocks, one per backend endpoint.
-- `frontend/src/views/dashboard/` — **Workbench**: dense genome-browser-style researcher dashboard (mutation table, zoomable probability track, zone analysis, alteration toolbox).
-- `frontend/src/views/comparative/` — **Compare**: batch console — score a list of point mutations and rank by impact.
-- `frontend/src/lib/workspace.js` — shared reactive session/sequence store used by all three views; documents the backend's session/mutation persistence quirks in code comments.
-- See `frontend/README.md` for setup/run instructions and a full list of backend behaviors the frontend has to work around (e.g. structural alteration endpoints return `null` and must be followed by a `GET /get/alteredsequence` call).
+
+Three alternative frontend MVPs consuming the API above, switchable at
+runtime via a 3-position `SegmentedControl` in `App.js`. **No build step** —
+plain ES modules with Preact + [`htm`](https://github.com/developit/htm) +
+Chart.js loaded from `esm.sh` at runtime (no `package.json`/`node_modules`,
+no bundler, no test runner). This has two direct consequences every session
+touching the frontend should plan around:
+- **No automated verification exists.** `pytest` covers only `app/`. Frontend
+  correctness checking in past sessions has been: (a) brace/paren/bracket
+  balance on edited files, (b) `frontend/serve.py` byte-diffing served files
+  against disk (catches truncation/encoding mistakes only), (c) manually
+  tracing `htm` template logic against real backend response shapes fetched
+  live. None of this substitutes for actually opening the app in a browser —
+  do that if the environment has one; if not, say so explicitly rather than
+  claiming the UI works.
+- **Read this section instead of re-exploring the tree.** Every file below
+  was read in full at least once while writing this section (2026-07-09).
+  Re-reading them all from scratch each session (as several past Worker/
+  Judge sessions have done) is pure wasted tool calls — trust this map,
+  spot-check only the specific file(s) your task touches.
+
+#### 9.1 Directory map
+
+```
+frontend/
+├── README.md                       # setup/run instructions
+├── serve.py                        # stdlib static file server + API reverse
+│                                    # proxy (avoids CORS without touching
+│                                    # backend — backend has no CORS middleware)
+└── src/
+    ├── main.js                     # mounts <App/>
+    ├── App.js                      # top-level 3-way SegmentedControl + view switch
+    ├── api/
+    │   └── client.js               # one function per backend endpoint; thin fetch wrapper
+    ├── lib/
+    │   ├── preact.js               # re-exports Preact + htm from esm.sh (single import point)
+    │   ├── sequence.js             # pure helpers: validation, diffing, label parsing (see 9.3)
+    │   └── workspace.js            # shared reactive session store, used by all 3 views (see 9.4)
+    ├── components/shared/          # used across 2+ of the 3 proposals — see 9.2
+    │   ├── Chart.js                 # Chart.js wrapper — HIGH TRAFFIC, see 9.2
+    │   ├── SessionBar.js            # sequence loader / session indicator
+    │   ├── SequenceTrack.js         # monospace diff-highlighted sequence viewer
+    │   ├── Feedback.js              # ErrorBanner, Spinner, StatTile, Badge
+    │   └── SegmentedControl.js      # generic N-way toggle (top bar + Compare's data-source toggle)
+    └── views/
+        ├── pipeline/                # Proposal 1 — "Pipeline" (CyberChef-style), see 9.5
+        │   ├── PipelineView.js       # top-level layout, drag/drop orchestration, bake()
+        │   ├── blockDefinitions.js   # BLOCK_DEFINITIONS — one entry per backend endpoint
+        │   ├── BlockForm.js          # generic field renderer driven by a block's `fields` schema
+        │   ├── BlockLibrary.js       # left-column palette, drag source for new blocks
+        │   ├── RecipeBlock.js        # one stacked block instance in the recipe
+        │   ├── OutputPanel.js        # renders the last block's result by outputKind
+        │   └── pipeline.css
+        ├── dashboard/                # Proposal 2 — "Workbench" (always-visible panel grid)
+        │   ├── DashboardView.js      # 3-column panel grid layout
+        │   ├── dashboard.css
+        │   └── panels/
+        │       ├── MutationManager.js    # point-mutation table → scoreDelta/scoreSimple probes
+        │       ├── GenomeTrack.js        # synchronized sequence + proba/delta Chart, windowed
+        │       ├── DeltaSummary.js       # stat tiles from the last delta result (no chart)
+        │       ├── ZonePanel.js          # PELT zone analysis; reports positions up for GenomeTrack highlight
+        │       ├── AlterationToolbox.js  # single-shot structural edits, reuses BlockForm+blockDefinitions
+        │       └── HistoryLog.js         # client-side ws.history feed + TrackedProbabilities subsection
+        └── comparative/              # Proposal 3 — "Compare" (batch console)
+            ├── ComparativeView.js     # Data Source toggle (delta batch vs. tracked-alteration proba)
+            ├── RankingTable.js        # sortable table, mode-aware column labels
+            ├── ManhattanChart.js      # scatter overview, mode-aware axis labels
+            ├── DetailChart.js         # per-row detail trace, mode-aware flatten function
+            ├── DiffView.js            # stacked reference/altered sequence diff
+            ├── ExportBar.js           # CSV/JSON export of the ranking table
+            └── comparative.css
+```
+
+#### 9.2 Shared components — high blast-radius, check for collisions before editing
+
+These are imported by multiple views/proposals. A change here affects
+everything downstream; before editing, grep for every call site and check
+`docs/ai/progress.md`'s active backlog for other tasks touching the same
+file (several planned tasks explicitly overlap here — see the file itself).
+
+- **`Chart.js`** — thin Chart.js wrapper (`type`, `labels`, `datasets`,
+  `options` props). As of 2026-07-09 it has **no interactivity** — no click
+  handling, no zoom/pan plugin, no region annotation. Called from
+  `OutputPanel.js` (×3: `ProbaOutput`, `ProbaHistoryOutput`, `DeltaOutput`),
+  `GenomeTrack.js`, `DetailChart.js`, `ManhattanChart.js`. Multiple backlog
+  tasks (peak-click popup, zoom controls, pattern-match region shading) all
+  extend this same file — expect to need a Chart.js plugin (e.g.
+  `chartjs-plugin-zoom`, `chartjs-plugin-annotation`) registered once,
+  shared correctly across every one of those call sites, not per-call-site
+  reimplementations.
+- **`SessionBar.js`** — sequence loader + session indicator, rendered with
+  different CSS framing (`compact` prop) in all three proposals. As of
+  2026-07-09 (Task 5/6) it has two distinct actions: "Load sequence"
+  (changes the *current* session's base sequence in place, disabled with no
+  active session) and "Start new session" (always mints a fresh
+  `session_id`) — see 9.4 for the backend calls behind each.
+- **`SequenceTrack.js`** — monospace FASTA-style viewer, 60 bases/row, a
+  position gutter, and per-base diff highlighting against an optional
+  `reference` sequence (hover title shows `position N: ref→base`). Also
+  accepts `highlightRanges` (zone highlighting, used by `GenomeTrack.js`)
+  and, since Task 8, an `operations` Map (0-based position → operation
+  summary string, appended to the hover title) used by Pipeline's
+  `SequenceOutput`.
+- **`Feedback.js`** — `ErrorBanner`, `Spinner`, `StatTile`, `Badge`. No
+  modal/popover exists here as of 2026-07-09 — a planned task (peak-click
+  popup) needs to add one.
+- **`SegmentedControl.js`** — generic N-way toggle; takes an `ariaLabel`
+  prop (default `"Frontend proposal"` for the top-level 3-way switch) so a
+  second instance (Compare's Data Source toggle) can self-identify to
+  screen readers correctly.
+
+#### 9.3 `frontend/src/lib/sequence.js` — pure helper functions
+
+No backend calls, no state — safe to unit-reason-about in isolation.
+`cleanSequence()`/`isValidSequence()` (strict ACGT, case-insensitive),
+`buildMutation()` (constructs `>p.<pos>.<ref>><alt>` strings),
+`flattenProbaTrack()`/`flattenDeltaTrack()` (backend's
+`{index: {base: value}}` / `{index: {value, delta_proportion_variation}}`
+dicts → parallel arrays for Chart.js), `parseTrackedLabel()` (tracked-
+alteration human label → `{from, to, summary}` position range — as of
+Task 8's fix, returns `null` rather than a fabricated range for operation
+types the label doesn't encode a position for), `diffToPointMutations()`
+(Task 9 — same-length before/after diff → point-mutation strings, rejects
+length-changing diffs). `toCsv()`/`downloadFile()` for exports.
+
+#### 9.4 `frontend/src/lib/workspace.js` — the shared state store
+
+A hand-rolled reactive store (not Redux/Zustand — just a module-level
+object + a `Set` of listener callbacks + `useWorkspace()` hook that
+re-renders on any change). Survives switching the top-level 3-way toggle,
+which is what makes the proposals feel like one app instead of three.
+
+**State shape:** `{ name, baseSequence, sessionId, alteredSequence, history[],
+lastResult, lastError, busy }`. `history` entries are
+`{ id, ts, kind: 'init'|'structural'|'probe'|'error', label, detail?, at }`.
+
+**Method contract (all wrapped in `withBusy()` — sets `busy`, catches
+errors into `lastError`):**
+| Method | Backend call | Session effect |
+|---|---|---|
+| `initSession(sequence, name?)` | `POST /resetgv`, `session_id: null` | Always mints a **new** session; resets all client state. |
+| `loadSequenceIntoSession(sequence, name?)` | `POST /resetgv`, existing `session_id` + non-empty `sequence` | In-place: changes `base_sequence`, clears tracked history, **same** `session_id`. (Task 5/6.) |
+| `resetSession()` | `POST /resetgv`, existing `session_id` + **unchanged** `sequence` | Clears tracked history only, `base_sequence` untouched. Used by Pipeline's `bake()` before re-running alteration blocks (Task 7). |
+| `refreshAlteredSequence()` / `runAlteration(label, apiCall)` | `GET /get/alteredsequence` | Structural alteration endpoints return `null` by design (no `return` in the route handler) — this is the **only** way to observe their effect. |
+| `scoreSimple(mutations)` / `scoreDelta(mutations)` | `POST /GetSimpleProb/` / `POST /GetDeltaScore/` | **Read-only probe** — mutations are applied transiently in-memory server-side, never written back to the session. Does not chain into structural operations. |
+| `fetchAllSimpleProbas()` | `GET /get/allsimpleprobas` | Read-only. |
+| `analyzeZones(params)` | `POST /analysis/patterninzona` | Read-only. |
+
+**Backend quirks the frontend works around (all confirmed by reading the
+actual router code, not assumed):**
+1. Structural alteration endpoints (`/altbyindex/*`, `/altbypattern/*`,
+   `/mutateindependently`) return `null` — always follow with
+   `GET /get/alteredsequence` to see the effect.
+2. Point-mutation scoring (`/GetSimpleProb/`, `/GetDeltaScore/`) is a
+   read-only probe against whatever the session's `altered_sequence`
+   currently is — it does **not** persist and does **not** chain with
+   structural operations, even though both "mutate" the sequence
+   conceptually.
+3. The session model is a **single linear chain** — one
+   `current_altered_sequence` per session that every structural operation
+   builds on. There is no branching/multi-variant state (relevant if a
+   task ever needs to represent "N alternative outcomes" — see Task 17's
+   explicit design note in `progress.md`).
+4. Sequence validation is strict ACGT only, case-insensitive — no `N`/IUPAC
+   ambiguity codes accepted (relevant to Task 19, FASTA upload).
+5. `POST /resetgv` has two different in-place behaviors depending on
+   payload as of Task 5 — see the method table above; don't assume
+   "existing `session_id`" always means "reconnect without change" the way
+   it did before Task 5.
+
+#### 9.5 The Pipeline's block/recipe pattern
+
+`blockDefinitions.js`'s `BLOCK_DEFINITIONS` array is the single source of
+truth for every block: `id`, `category` (`Index-based`/`Pattern-based`/
+`Random`/`Scoring`/`Analysis` — categories `Index-based`/`Pattern-based`/
+`Random` map 1:1 to "this block mutates the session's sequence" and are
+checked by name in `PipelineView.js`'s `bake()`, e.g. for the Task 7 reset
+fix — keep that check in sync if categories are ever renamed), `label`,
+`summary`, `fields` (schema consumed generically by `BlockForm.js` — adding
+a block never requires touching `BlockForm.js`), `outputKind` (drives which
+`OutputPanel.js` sub-renderer fires), and `run(params)` (calls into
+`workspace`). `AlterationToolbox.js` (Workbench) reuses this exact same
+array for its single-shot operation picker — a block definition change
+affects both proposals at once.
 
 ## Key Design Patterns
 - **Factory Pattern**: `create_internal_variant()` in `internal_gv_factory.py`

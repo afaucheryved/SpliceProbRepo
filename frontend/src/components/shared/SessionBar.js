@@ -52,7 +52,7 @@ export function SessionBar({ compact = false }) {
             type="button"
             class="btn"
             disabled=${ws.busy || !ws.sessionId}
-            title=${ws.sessionId ? "Replace the current session's base sequence with the text above" : "Load a sequence first to enable this action"}
+            title=${ws.sessionId ? "Replace the current session's base sequence with the text above" : "No active session yet — click 'Start new session' first"}
             onClick=${handleLoadSequence}
           >
             Load sequence

@@ -2,7 +2,7 @@ import { html } from "../../lib/preact.js";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
-import { flattenProbaTrack, flattenDeltaTrack, parseTrackedLabel } from "../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
 // type is `dict[set[mut], float]` but the actual runtime keys are Python
@@ -11,23 +11,6 @@ import { flattenProbaTrack, flattenDeltaTrack, parseTrackedLabel } from "../../l
 function parseZoneKey(key) {
   const matches = [...key.matchAll(/'(>p\.\d+\.[a-zA-Z]>[a-zA-Z])'/g)].map((m) => m[1]);
   return matches.length ? matches.join(", ") : key;
-}
-
-// Build a Map from 0-based position index → operation summary string from
-// the tracked-alteration data returned by GET /get/allsimpleprobas.
-// Each entry's label (e.g. "1: insert:aaaa@12") is parsed to extract the
-// position range and operation summary.
-function buildOperationsMap(probaHistoryData) {
-  if (!probaHistoryData) return null;
-  const ops = new Map();
-  for (const [label] of Object.entries(probaHistoryData)) {
-    const parsed = parseTrackedLabel(label);
-    if (!parsed) continue;
-    for (let i = parsed.from; i <= parsed.to; i++) {
-      ops.set(i, parsed.summary);
-    }
-  }
-  return ops.size > 0 ? ops : null;
 }
 
 function SequenceOutput({ sequence, operations }) {

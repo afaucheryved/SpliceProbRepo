@@ -1,4 +1,4 @@
-import { html } from "../../lib/preact.js";
+import { html, useState } from "../../lib/preact.js";
 import { MUTATION_MATRIX_BASES } from "../../api/client.js";
 
 const BASE_OPTIONS = ["a", "c", "g", "t"];
@@ -43,8 +43,10 @@ function SelectField({ field, value, onChange }) {
   `;
 }
 
-function MutationListField({ field, value, onChange }) {
+function MutationListField({ field, value, onChange, blockUid, onDropOnMutationList }) {
   const rows = value ?? [];
+  const [dropError, setDropError] = useState(null);
+  const [dropOver, setDropOver] = useState(false);
   const update = (i, patch) => {
     const next = rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
     onChange(next);
@@ -52,13 +54,47 @@ function MutationListField({ field, value, onChange }) {
   const add = () => onChange([...rows, { position: rows.length + 1, ref: "a", alt: "c" }]);
   const remove = (i) => onChange(rows.filter((_, idx) => idx !== i));
 
+  function handleDragOver(e) {
+    // Only accept drops from recipe blocks (not from the library).
+    if (!e.dataTransfer.types.includes("application/x-recipe-block-uid")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDropOver(true);
+  }
+
+  function handleDragLeave(e) {
+    setDropOver(false);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropOver(false);
+    setDropError(null);
+    const sourceUid = e.dataTransfer.getData("application/x-recipe-block-uid");
+    if (!sourceUid || !onDropOnMutationList) return;
+    const result = onDropOnMutationList(blockUid, sourceUid);
+    if (result && result.error) {
+      setDropError(result.error);
+    }
+  }
+
   return html`
-    <div class="field mutation-list">
-      <label>${field.label}</label>
+    <div
+      class="field mutation-list ${dropOver ? "mutation-list--drop-target" : ""}"
+      onDragOver=${handleDragOver}
+      onDragLeave=${handleDragLeave}
+      onDrop=${handleDrop}
+    >
+      <label>
+        ${field.label}
+        <span class="field-hint"> — drag an Index-based or Pattern-based block here to append its mutations</span>
+      </label>
+      ${dropError ? html`<p class="recipe-block__error">⚠ ${dropError}</p>` : null}
       ${rows.map(
         (row, i) => html`
           <div class="mutation-list__row" key=${i}>
-            <span class="mutation-list__prefix">&gt;p.</span>
+            <span class="mutation-list__prefix">>p.</span>
             <input
               type="number"
               min="1"
@@ -69,7 +105,7 @@ function MutationListField({ field, value, onChange }) {
             <select value=${row.ref} onChange=${(e) => update(i, { ref: e.currentTarget.value })}>
               ${BASE_OPTIONS.map((b) => html`<option value=${b}>${b}</option>`)}
             </select>
-            <span>&gt;</span>
+            <span>></span>
             <select value=${row.alt} onChange=${(e) => update(i, { alt: e.currentTarget.value })}>
               ${BASE_OPTIONS.map((b) => html`<option value=${b}>${b}</option>`)}
             </select>
@@ -163,7 +199,7 @@ const FIELD_COMPONENTS = {
 // Generic form renderer driven entirely by a block definition's `fields`
 // schema (see blockDefinitions.js) -- adding a new block never requires
 // touching this file.
-export function BlockForm({ def, params, onChange }) {
+export function BlockForm({ def, params, onChange, blockUid, onDropOnMutationList }) {
   const setField = (key, value) => onChange({ ...params, [key]: value });
   return html`
     <div class="block-form">
@@ -171,7 +207,7 @@ export function BlockForm({ def, params, onChange }) {
         .filter((field) => !field.showIf || field.showIf(params))
         .map((field) => {
           const Field = FIELD_COMPONENTS[field.type] ?? TextField;
-          return html`<${Field} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} />`;
+          return html`<${Field} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} blockUid=${blockUid} onDropOnMutationList=${onDropOnMutationList} />`;
         })}
     </div>
   `;

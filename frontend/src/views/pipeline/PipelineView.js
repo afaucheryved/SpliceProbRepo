@@ -3,7 +3,7 @@ import { SessionBar } from "../../components/shared/SessionBar.js";
 import { Spinner } from "../../components/shared/Feedback.js";
 import { useWorkspace } from "../../lib/workspace.js";
 import { api } from "../../api/client.js";
-import { parseTrackedLabel } from "../../lib/sequence.js";
+import { parseTrackedLabel, parseMutation, diffToPointMutations } from "../../lib/sequence.js";
 import { BlockLibrary } from "./BlockLibrary.js";
 import { RecipeBlock } from "./RecipeBlock.js";
 import { OutputPanel } from "./OutputPanel.js";
@@ -76,6 +76,10 @@ export function PipelineView() {
     onDragStart: (e, index) => {
       setDragIndex(index);
       e.dataTransfer.effectAllowed = "move";
+      // Also tag the drag with the recipe block's uid so mutation-list
+      // drop targets can identify which block was dragged (Task 9).
+      const block = recipe[index];
+      if (block) e.dataTransfer.setData("application/x-recipe-block-uid", block.uid);
     },
     onDragOver: (e, index) => {
       e.preventDefault();
@@ -148,6 +152,10 @@ export function PipelineView() {
 
     let lastOutput = null;
     let stopped = false;
+    // Track the sequence state before each block runs, so alteration blocks
+    // can later be dragged onto a point-mutations block to translate their
+    // effect into explicit >p.<pos>.<ref>><alt> strings (Task 9).
+    let runningSequence = ws.baseSequence;
     for (const block of recipe) {
       if (stopped) {
         patchBlock(block.uid, { status: "skipped" });
@@ -158,10 +166,27 @@ export function PipelineView() {
         continue;
       }
       const def = blockById(block.defId);
+      const beforeSeq = runningSequence;
       patchBlock(block.uid, { status: "running" });
       try {
         const result = await def.run(block.params);
-        patchBlock(block.uid, { status: "success", resultSummary: summarize(def, result) });
+        // If this block produced a sequence result, update the running
+        // sequence and store the before/after pair on the block.
+        if (def.outputKind === "sequence" && typeof result === "string") {
+          runningSequence = result;
+          patchBlock(block.uid, {
+            status: "success",
+            resultSummary: summarize(def, result),
+            resultData: result,
+            beforeSequence: beforeSeq,
+          });
+        } else {
+          patchBlock(block.uid, {
+            status: "success",
+            resultSummary: summarize(def, result),
+            resultData: result,
+          });
+        }
         lastOutput = { kind: def.outputKind, data: result };
       } catch (err) {
         patchBlock(block.uid, { status: "error", error: err.message || String(err) });
@@ -195,6 +220,47 @@ export function PipelineView() {
     setRunning(false);
   }
 
+  // Drop handler for dragging an alteration block onto a point-mutations
+  // block's mutation list. Translates the structural operation into
+  // explicit >p.<pos>.<ref>><alt> strings (Task 9).
+  function handleDropOnMutationList(targetUid, sourceUid) {
+    const sourceBlock = recipe.find((b) => b.uid === sourceUid);
+    if (!sourceBlock) return { error: "Source block not found in recipe." };
+    const def = blockById(sourceBlock.defId);
+    if (!def) return { error: "Unknown block type." };
+
+    // Only Index-based and Pattern-based blocks produce a sequence diff.
+    if (def.category !== "Index-based" && def.category !== "Pattern-based") {
+      return { error: `"${def.label}" blocks cannot be translated to point mutations — only Index-based and Pattern-based operations produce a sequence diff.` };
+    }
+
+    const before = sourceBlock.beforeSequence;
+    const after = sourceBlock.resultData;
+    if (!before || !after || typeof before !== "string" || typeof after !== "string") {
+      return { error: "No before/after sequence data available for this block. Run the recipe first so the block's effect can be captured." };
+    }
+
+    const { mutations, error } = diffToPointMutations(before, after);
+    if (error) return { error };
+    if (mutations.length === 0) {
+      return { error: "This operation produced no base-level changes — nothing to append." };
+    }
+
+    // Append the mutations to the target block's rows.
+    setRecipe((r) =>
+      r.map((b) => {
+        if (b.uid !== targetUid) return b;
+        const existingRows = b.params.rows || [];
+        const newRows = mutations.map((m) => {
+          const parsed = parseMutation(m);
+          return parsed ? { position: parsed.position, ref: parsed.ref, alt: parsed.alt } : null;
+        }).filter(Boolean);
+        return { ...b, params: { ...b.params, rows: [...existingRows, ...newRows] } };
+      })
+    );
+    return { error: null };
+  }
+
   return html`
     <div class="pipeline-view">
       <div class="pipeline-view__columns">
@@ -224,6 +290,7 @@ export function PipelineView() {
                       onParamsChange=${updateParams}
                       onRemove=${removeBlock}
                       onToggle=${toggleBlock}
+                      onDropOnMutationList=${handleDropOnMutationList}
                       dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
                     />
                   `

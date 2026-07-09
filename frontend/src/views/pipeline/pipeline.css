@@ -1,4 +1,4 @@
-.pipeline-view {
+op the .pipeline-view {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -220,6 +220,13 @@
 
 .mutation-list__pos {
   width: 4.5rem;
+}
+
+.mutation-list--drop-target {
+  outline: 2px dashed var(--app-accent, #6366f1);
+  outline-offset: 2px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.06);
 }
 
 .matrix-field {

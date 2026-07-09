@@ -27,19 +27,30 @@ THE THREE ROLES
   implements the FIRST unchecked task it finds — one task per session.
   What it never does: mark its own task done/failed (that's the Judge's
   call), or start a second task in the same session.
-  Hard limit: if it estimates it has used ~1/3 of its context window, it
-  stops immediately, saves its exact stopping point to active_context.md,
-  updates progress.md with what it actually finished, and tells you to
-  start a fresh session. This is intentional — it keeps each Worker
-  session focused and avoids degraded output from a near-full context
-  window. It is normal to need several [WORKER] sessions to close one task.
+  Hard limit (2026-07-09 update): LLMs can't reliably estimate their own
+  token usage as a percentage, so instead of "stop at ~1/3 of context" the
+  AI now counts its own tool calls (a number it can always get exactly
+  right, excluding cheap task-tracking calls) — it wraps up at 20 and
+  hard-stops at 30. If you see a Worker session stop mid-task, that's this
+  limit working as intended, not a crash. It is normal to need several
+  [WORKER] sessions to close one task — if a task keeps needing many
+  sessions, that's a sign the Planner should have split it smaller next
+  time (the AI is instructed to say so in its handoff note when that
+  happens).
+  Implementation notes belong in progress.md ONLY, appended under the
+  task. active_context.md is a short pointer ("stopped here, do this
+  next") — if you see paragraphs duplicated between the two files, that's
+  drift the AI has been told to stop doing, but flag it if you spot it.
   How to trigger it: start a new session with `[WORKER]` and nothing else
   needed — it will figure out what to do from the backlog.
 
 [JUDGE]  — Lead QA Engineer & Auditor
   What it does: reads docs/ai/audits_history.md first (so it doesn't
   repeat a mistake already made and logged before), reviews what the
-  Worker(s) produced, runs tests, and then either:
+  Worker(s) produced, runs tests — including at least one case the Worker
+  didn't try itself, not just a re-run of their own tests, since a
+  Worker's own repro only proves the one case it covers — and then
+  either:
     - marks the task [FAILED] in progress.md with clear next steps and
       logs the bug in audits_history.md, or
     - marks the task [DONE] in progress.md.
@@ -65,7 +76,12 @@ architecture.md    Living technical map: layers, data flow, known issues.
 progress.md         The task backlog. Planner writes tasks in as `[ ]`,
                     Worker implements them, Judge flips them to `[DONE]`
                     or `[FAILED]` with notes. This is the single source of
-                    truth for "what's left to do."
+                    truth for "what's left to do." As of 2026-07-09 the
+                    active backlog lives at the TOP of the file; older
+                    completed-feature catalog / historical fix logs live
+                    below a "Reference: Feature Catalog & Historical Fix
+                    Log" divider. If you're checking what's outstanding,
+                    you never need to scroll past that divider.
 
 active_context.md   Short-lived handoff notes between Worker sessions
                     only — "here's exactly where I stopped and what's

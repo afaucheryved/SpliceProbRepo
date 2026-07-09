@@ -1,31 +1,37 @@
 # Active Context
 
 ## Current Objectives
-Tasks 5-8 reviewed by `[JUDGE]` (2026-07-09). Task 5 and Task 7 are `[DONE]`. Task 6 and Task 8 are `[FAILED]` — routed back to `[WORKER]` with specific, small fix instructions (see `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8" and `docs/ai/progress.md` for full detail). Next `[WORKER]` session should re-attempt Task 6 and Task 8 before picking up Task 9+.
-
-**Process note for future `[WORKER]` sessions:** the previous session marked its own tasks `[x]` in `progress.md`/`active_context.md` — per `.clinerules` §3, only `[JUDGE]` marks `[DONE]`/`[FAILED]`. Append an implementation note instead and leave the checkbox for the Judge.
+Tasks 5-8 reviewed by `[JUDGE]` (2026-07-09). Task 5 and Task 7 are `[DONE]`. Task 6 and Task 8 were `[FAILED]` — re-attempted by `[WORKER]` (2026-07-09), pending Judge review. Task 9 implemented (2026-07-09), pending Judge review.
 
 ### Completed Tasks
 - [x] **Task 5** — In-place session-reset via `POST /resetgv` — `[DONE]`, independently verified.
-- [ ] **Task 6** — Split "Load sequence" from "Start new session" in `SessionBar.js` — `[FAILED]`: disabled-state tooltip on the "Load sequence" button is circular/self-contradictory ("Load a sequence first to enable this action" shown on the Load-sequence button itself). One-line fix.
+- [ ] **Task 6** — Split "Load sequence" from "Start new session" in `SessionBar.js` — Re-attempted: fixed disabled-state tooltip from circular "Load a sequence first to enable this action" to "No active session yet — click 'Start new session' first". Pending Judge review.
 - [x] **Task 7** — Fix repeated "Bake" clicks accumulating duplicate tracked alterations — `[DONE]`, independently reproduced the exact original bug scenario, confirmed fixed.
-- [ ] **Task 8** — Highlight modified sequence regions with block-operation summary on hover — `[FAILED]`: `parseTrackedLabel()` in `frontend/src/lib/sequence.js` attaches Move/Copy-paste labels to the wrong (stale source, not destination) position, and hardcodes position 0 for Replace/Delete-by-pattern/Random-mutation instead of omitting them. Fix instructions in the audit are concrete (the destination range is derivable from data already captured in the existing regex match).
+- [ ] **Task 8** — Highlight modified sequence regions with block-operation summary on hover — Re-attempted: fixed `parseTrackedLabel()` in `frontend/src/lib/sequence.js` — `move`/`copy_paste` now return the destination range (derived from `index_paste` and pattern length) instead of the stale source range; `replace`/`delete_by_pattern`/`mutate_independently` now return `null` instead of fabricating `{from:0, to:0}`. Removed dead `buildOperationsMap()` from `OutputPanel.js` and its now-unused `parseTrackedLabel` import. Pending Judge review.
+- [ ] **Task 9** — Drag Index/Pattern blocks into "Point Mutations → Delta Score" block — Implemented: `diffToPointMutations()` in `sequence.js`; `bake()` stores `beforeSequence`/`resultData` on alteration blocks; `handleDropOnMutationList()` diffs before/after and appends `>p.<pos>.<ref>><alt>` strings; `MutationListField` accepts drops with `application/x-recipe-block-uid` dataTransfer type; `mutation-list--drop-target` CSS highlight. Length-changing edits rejected with clear error. Pending Judge review.
 
 ## Current Working Files
-- `frontend/src/lib/sequence.js` — `parseTrackedLabel()` needs the move/copy_paste + replace/delete_by_pattern/mutate_independently fixes (Task 8 re-attempt)
-- `frontend/src/components/shared/SessionBar.js` — disabled-tooltip text needs fixing (Task 6 re-attempt)
+- `frontend/src/components/shared/SessionBar.js` — line 55: tooltip text changed (Task 6 re-attempt)
+- `frontend/src/lib/sequence.js` — `parseTrackedLabel()` fixes (Task 8) + `diffToPointMutations()` (Task 9)
+- `frontend/src/views/pipeline/OutputPanel.js` — removed dead `buildOperationsMap()` (Task 8 cleanup)
+- `frontend/src/views/pipeline/PipelineView.js` — `bake()` stores before/after per block, `handleDropOnMutationList()`, drag tags (Task 9)
+- `frontend/src/views/pipeline/RecipeBlock.js` — forwards `onDropOnMutationList` + `blockUid` to `BlockForm` (Task 9)
+- `frontend/src/views/pipeline/BlockForm.js` — `MutationListField` drop support + error display (Task 9)
+- `frontend/src/views/pipeline/pipeline.css` — `.mutation-list--drop-target` style (Task 9)
 
 ## Recent Changes
 | Date | Change | Files Affected |
 |------|--------|---------------|
-| 2026-07-09 | Task 5: In-place session-reset for `POST /resetgv` — Judge-verified `[DONE]` | `internal_gv_factory.py`, `resetgv_router.py`, `test_endpoint_integration.py` |
-| 2026-07-09 | Task 6: Two distinct buttons in SessionBar — Judge-reviewed, `[FAILED]` (confusing tooltip) | `workspace.js`, `SessionBar.js` |
-| 2026-07-09 | Task 7: Reset session before Bake to prevent duplicate tracked entries — Judge-verified `[DONE]` | `PipelineView.js`, `workspace.js` |
-| 2026-07-09 | Task 8: Operation labels on hover in SequenceTrack — Judge-reviewed, `[FAILED]` (wrong/fabricated positions) | `sequence.js`, `SequenceTrack.js`, `PipelineView.js`, `OutputPanel.js` |
+| | 2026-07-09 | Task 5: In-place session-reset for `POST /resetgv` — Judge-verified `[DONE]` | `internal_gv_factory.py`, `resetgv_router.py`, `test_endpoint_integration.py` |
+| | 2026-07-09 | Task 6: Two distinct buttons in SessionBar — Judge-reviewed, `[FAILED]` (confusing tooltip) | `workspace.js`, `SessionBar.js` |
+| | 2026-07-09 | Task 7: Reset session before Bake to prevent duplicate tracked entries — Judge-verified `[DONE]` | `PipelineView.js`, `workspace.js` |
+| | 2026-07-09 | Task 8: Operation labels on hover in SequenceTrack — Judge-reviewed, `[FAILED]` (wrong/fabricated positions) | `sequence.js`, `SequenceTrack.js`, `PipelineView.js`, `OutputPanel.js` |
+| | 2026-07-09 | Task 6 re-attempt: fixed disabled-tooltip text on "Load sequence" button | `SessionBar.js` |
+| | 2026-07-09 | Task 8 re-attempt: fixed `parseTrackedLabel()` destination ranges + null-for-unpositionable; removed dead `buildOperationsMap()` | `sequence.js`, `OutputPanel.js` |
+| | 2026-07-09 | Task 9: drag Index/Pattern blocks into point-mutations block to append translated mutations | `sequence.js`, `PipelineView.js`, `RecipeBlock.js`, `BlockForm.js`, `pipeline.css` |
 
 ## Next Steps (Future / Optional)
-- Re-attempt Task 6 (tooltip fix) and Task 8 (`parseTrackedLabel()` fixes) — both small, see audit for exact fix.
-- Task 9: Drag Index/Pattern blocks into "Point Mutations → Delta Score" block
+- Judge review of Task 6, Task 8 re-attempts, and Task 9 implementation
 - Task 10: Chart peak click-to-popup
 - Task 11+: see `docs/ai/progress.md` for the full backlog
 

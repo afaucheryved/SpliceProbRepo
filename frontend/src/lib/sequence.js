@@ -108,35 +108,66 @@ export function parseTrackedLabel(label) {
   }
 
   // move:{start_cc}-{end_cc}->@{index_paste}
+  // After a move the content lives at the paste destination, not the source.
   m = body.match(/^move:(\d+)-(\d+)->@(\d+)$/);
   if (m) {
-    return { from: Number(m[1]) - 1, to: Number(m[2]) - 1, summary: body };
+    const destStart = Number(m[3]) - 1; // 0-based paste index
+    const patternLen = Number(m[2]) - Number(m[1]) + 1;
+    return { from: destStart, to: destStart + patternLen - 1, summary: body };
   }
 
   // copy_paste:{start_cc}-{end_cc}@{index_paste}
+  // The new copy lives at the paste destination, not the source.
   m = body.match(/^copy_paste:(\d+)-(\d+)@(\d+)$/);
   if (m) {
-    return { from: Number(m[1]) - 1, to: Number(m[2]) - 1, summary: body };
+    const destStart = Number(m[3]) - 1;
+    const patternLen = Number(m[2]) - Number(m[1]) + 1;
+    return { from: destStart, to: destStart + patternLen - 1, summary: body };
   }
 
-  // replace:{old}->{new}
+  // replace:{old}->{new} — position not encoded in label; skip rather than
+  // misattributing to position 0.  Task 17 will supply real per-match ranges.
   m = body.match(/^replace:(.+)->(.+)$/);
   if (m) {
-    return { from: 0, to: 0, summary: body };
+    return null;
   }
 
-  // delete_by_pattern:{pattern}
+  // delete_by_pattern:{pattern} — same reasoning as replace above.
   m = body.match(/^delete_by_pattern:(.+)$/);
   if (m) {
-    return { from: 0, to: 0, summary: body };
+    return null;
   }
 
-  // mutate_independently
+  // mutate_independently — position not encoded; skip.
   if (body === "mutate_independently") {
-    return { from: 0, to: 0, summary: "Random mutation" };
+    return null;
   }
 
   return null;
+}
+
+// Diff two same-length sequences into point-mutation strings.
+// Returns { mutations: string[], error: null } on success,
+// or { mutations: null, error: "message" } on failure.
+export function diffToPointMutations(before, after) {
+  if (!before || !after) {
+    return { mutations: null, error: "No sequence data available for this block. Run the recipe first." };
+  }
+  if (before.length !== after.length) {
+    return {
+      mutations: null,
+      error: `Cannot translate to point mutations: the operation changes sequence length (${before.length} → ${after.length} bp). Only same-length edits are representable as point mutations.`,
+    };
+  }
+  const mutations = [];
+  for (let i = 0; i < before.length; i++) {
+    const ref = before[i].toLowerCase();
+    const alt = after[i].toLowerCase();
+    if (ref !== alt) {
+      mutations.push(buildMutation(i + 1, ref, alt));
+    }
+  }
+  return { mutations, error: null };
 }
 
 export function downloadFile(filename, content, mime = "application/json") {

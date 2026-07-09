@@ -1,10 +1,16 @@
 import { html } from "../../lib/preact.js";
 import { Chart } from "../../components/shared/Chart.js";
 
-// Manhattan-plot-style overview: one point per batched mutation, x = its
-// position in the sequence, y = aggregate |Δ| impact (Σ|Δ acceptor| +
-// Σ|Δ donor|, computed client-side from already-fetched delta responses).
-export function ManhattanChart({ rows, focusedIndex, onFocus }) {
+const Y_AXIS_TITLE = {
+  delta: "Impact  Σ|Δ acceptor| + Σ|Δ donor|",
+  proba: "Signal  Σ acceptor proba + Σ donor proba",
+};
+
+// Manhattan-plot-style overview: one point per row (batched mutation, or
+// tracked alteration -- see ComparativeView.js), x = its position in the
+// sequence, y = an aggregate impact/signal metric computed client-side
+// from the already-fetched per-row response.
+export function ManhattanChart({ rows, focusedIndex, onFocus, mode = "delta" }) {
   const points = rows
     .map((r, i) => ({ x: r.position, y: r.error ? 0 : r.totalAbs, i }))
     .filter((p) => !rows[p.i].error);
@@ -16,7 +22,7 @@ export function ManhattanChart({ rows, focusedIndex, onFocus }) {
       labels=${[]}
       datasets=${[
         {
-          label: "Mutation impact",
+          label: mode === "proba" ? "Baseline signal" : "Mutation impact",
           data: points,
           backgroundColor: points.map((p) => (p.i === focusedIndex ? "#dc2626" : "#2563eb")),
           pointRadius: points.map((p) => (p.i === focusedIndex ? 6 : 3.5)),
@@ -28,7 +34,7 @@ export function ManhattanChart({ rows, focusedIndex, onFocus }) {
         },
         scales: {
           x: { title: { display: true, text: "Position (1-based)" } },
-          y: { title: { display: true, text: "Impact  Σ|Δ acceptor| + Σ|Δ donor|" } },
+          y: { title: { display: true, text: Y_AXIS_TITLE[mode] } },
         },
         plugins: { legend: { display: false } },
       }}

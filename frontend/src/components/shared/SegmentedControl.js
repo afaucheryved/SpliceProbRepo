@@ -2,9 +2,9 @@ import { html } from "../../lib/preact.js";
 
 // The 3-position toggle switch required by the spec: swaps between the
 // three frontend proposals without a page reload.
-export function SegmentedControl({ options, value, onChange }) {
+export function SegmentedControl({ options, value, onChange, ariaLabel = "Frontend proposal" }) {
   return html`
-    <div class="segmented-control" role="tablist" aria-label="Frontend proposal">
+    <div class="segmented-control" role="tablist" aria-label=${ariaLabel}>
       ${options.map(
         (opt) => html`
           <button

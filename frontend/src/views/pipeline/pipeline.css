@@ -23,10 +23,23 @@
 }
 
 .pipeline-view__library,
-.pipeline-view__recipe,
+.pipeline-view__recipe {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pipeline-view__output-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+}
+
 .pipeline-view__output {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
 }
 
@@ -118,6 +131,20 @@
   color: #6b7280;
 }
 
+.recipe-block__collapse {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 0.15rem;
+  line-height: 1;
+}
+
+.recipe-block__collapse:hover {
+  color: var(--app-fg);
+}
+
 .recipe-block__title {
   font-weight: 700;
   font-size: 0.82rem;
@@ -167,6 +194,15 @@
   font-size: 0.68rem;
   color: #6b7280;
   margin: 0.2rem 0;
+}
+
+/* Plain text/number/select inputs in a recipe block's form — reduced to
+   ~1/3 width. Matrix/mutation-list fields keep their own dedicated widths
+   (they don't carry the .field__control class). */
+.recipe-block .field__control {
+  width: 33%;
+  min-width: 3.5rem;
+  align-self: flex-start;
 }
 
 .mutation-list__row {

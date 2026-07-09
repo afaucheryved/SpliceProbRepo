@@ -1,14 +1,23 @@
 import { html, useState, useMemo } from "../../lib/preact.js";
 
-const COLUMNS = [
-  { key: "position", label: "Pos" },
-  { key: "mutation", label: "Mutation" },
-  { key: "acceptorSum", label: "Σ|Δ| acceptor" },
-  { key: "donorSum", label: "Σ|Δ| donor" },
-  { key: "totalAbs", label: "Impact" },
-];
+const COLUMN_LABELS = {
+  delta: { acceptorSum: "Σ|Δ| acceptor", donorSum: "Σ|Δ| donor", totalAbs: "Impact" },
+  proba: { acceptorSum: "Σ acceptor proba", donorSum: "Σ donor proba", totalAbs: "Signal" },
+};
 
-export function RankingTable({ rows, focusedIndex, onFocus }) {
+function columnsFor(mode) {
+  const labels = COLUMN_LABELS[mode] ?? COLUMN_LABELS.delta;
+  return [
+    { key: "position", label: "Pos" },
+    { key: "mutation", label: "Mutation" },
+    { key: "acceptorSum", label: labels.acceptorSum },
+    { key: "donorSum", label: labels.donorSum },
+    { key: "totalAbs", label: labels.totalAbs },
+  ];
+}
+
+export function RankingTable({ rows, focusedIndex, onFocus, mode = "delta" }) {
+  const COLUMNS = columnsFor(mode);
   const [sortKey, setSortKey] = useState("totalAbs");
   const [sortDir, setSortDir] = useState(-1);
 

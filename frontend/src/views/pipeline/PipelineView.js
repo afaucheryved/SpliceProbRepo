@@ -102,6 +102,25 @@ export function PipelineView() {
     setOverIndex(null);
   }
 
+  // Fallback handlers on the .recipe-stack container itself, so empty space
+  // around/below the blocks (not just block rows or the tail strip) also
+  // accepts a drop. Guarded to only act when the event target is the
+  // container itself — drops on a child (RecipeBlock, tail strip) are
+  // already handled there and bubble up here without re-triggering.
+  function handleStackDragOver(e) {
+    if (e.target !== e.currentTarget) return;
+    e.preventDefault();
+    setOverIndex(recipe.length);
+  }
+  function handleStackDrop(e) {
+    if (e.target !== e.currentTarget) return;
+    handleTailDrop(e);
+  }
+  function handleStackDragLeave(e) {
+    if (e.target !== e.currentTarget) return;
+    setOverIndex(null);
+  }
+
   async function bake() {
     if (!ws.sessionId) return;
     setRunning(true);
@@ -136,9 +155,6 @@ export function PipelineView() {
 
   return html`
     <div class="pipeline-view">
-      <div class="pipeline-view__session">
-        <${SessionBar} />
-      </div>
       <div class="pipeline-view__columns">
         <aside class="pipeline-view__library panel">
           <h3 class="panel__title">Operations</h3>
@@ -153,7 +169,7 @@ export function PipelineView() {
             </button>
           </h3>
           ${!ws.sessionId ? html`<p class="output-panel__hint">Load a sequence above to enable execution.</p>` : null}
-          <div class="recipe-stack scroll-y">
+          <div class="recipe-stack scroll-y" onDragOver=${handleStackDragOver} onDrop=${handleStackDrop} onDragLeave=${handleStackDragLeave}>
             ${recipe.length === 0
               ? html`<div class="recipe-stack__empty">Click or drag an operation from the left to build your recipe.</div>`
               : recipe.map(
@@ -184,11 +200,16 @@ export function PipelineView() {
           </div>
         </section>
 
-        <section class="pipeline-view__output panel">
-          <h3 class="panel__title">Output</h3>
-          ${running ? html`<${Spinner} label="Running recipe…" />` : null}
-          <${OutputPanel} result=${finalResult} />
-        </section>
+        <div class="pipeline-view__output-col">
+          <div class="pipeline-view__session">
+            <${SessionBar} compact />
+          </div>
+          <section class="pipeline-view__output panel">
+            <h3 class="panel__title">Output</h3>
+            ${running ? html`<${Spinner} label="Running recipe…" />` : null}
+            <${OutputPanel} result=${finalResult} />
+          </section>
+        </div>
       </div>
     </div>
   `;

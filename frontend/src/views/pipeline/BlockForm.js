@@ -9,7 +9,7 @@ function TextField({ field, value, onChange }) {
       <label>${field.label}</label>
       <input
         type="text"
-        class=${field.type === "sequence" ? "mono" : ""}
+        class="field__control ${field.type === "sequence" ? "mono" : ""}"
         value=${value ?? ""}
         onInput=${(e) => onChange(e.currentTarget.value)}
       />
@@ -24,6 +24,7 @@ function IntField({ field, value, onChange }) {
       <input
         type="number"
         step="1"
+        class="field__control"
         value=${value ?? 0}
         onInput=${(e) => onChange(parseInt(e.currentTarget.value || "0", 10))}
       />
@@ -35,7 +36,7 @@ function SelectField({ field, value, onChange }) {
   return html`
     <div class="field">
       <label>${field.label}</label>
-      <select value=${value} onChange=${(e) => onChange(e.currentTarget.value)}>
+      <select class="field__control" value=${value} onChange=${(e) => onChange(e.currentTarget.value)}>
         ${field.options.map((opt) => html`<option value=${opt.value}>${opt.label}</option>`)}
       </select>
     </div>

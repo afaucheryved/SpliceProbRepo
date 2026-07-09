@@ -4,9 +4,9 @@ import { downloadFile, toCsv } from "../../lib/sequence.js";
 const CSV_COLUMNS = [
   { label: "position", value: (r) => r.position },
   { label: "mutation", value: (r) => r.mutation },
-  { label: "acceptor_sum_abs_delta", value: (r) => r.acceptorSum },
-  { label: "donor_sum_abs_delta", value: (r) => r.donorSum },
-  { label: "impact", value: (r) => r.totalAbs },
+  { label: "acceptor_sum", value: (r) => r.acceptorSum },
+  { label: "donor_sum", value: (r) => r.donorSum },
+  { label: "score", value: (r) => r.totalAbs },
 ];
 
 export function ExportBar({ rows }) {
@@ -28,7 +28,7 @@ export function ExportBar({ rows }) {
         onClick=${() =>
           downloadFile(
             "spliceprob_ranking.json",
-            JSON.stringify(exportable.map((r) => ({ ...r, deltaData: undefined })), null, 2),
+            JSON.stringify(exportable.map((r) => ({ ...r, resultData: undefined })), null, 2),
             "application/json"
           )}
       >

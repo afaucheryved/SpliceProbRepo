@@ -5,6 +5,7 @@
 - [x] **`POST /GetDeltaScore/`** — Returns the delta (difference) in splicing scores between original and mutated sequences.
 - [x] **`POST /resetgv`** — Starts/resets a session-bound internal genetic variant with a new sequence/mutations (session-based, not singleton — see `docs/ai/architecture.md` → "Session Management").
 - [x] **`GET /get/sequence|gv|simpleproba|deltaproba|mutations|alteredsequence`** — Read accessors for a session's variant state (`session_id` query param).
+- [ ] **`GET /get/allsimpleprobas`** — Baseline probability per tracked altered-sequence version, keyed by `"{step index}: {mutation.human}"`. **Known bug (2026-07-09, see `docs/ai/audits_history.md`): the per-entry `"altered sequence"` field is silently wrong for bounded deletes and non-default-length insert/move/copy-paste** — `acceptor_proba`/`donor_proba` are correct (cached, unaffected). Not yet fixed — next `[WORKER]` session should re-attempt per the audit's fix instructions.
 
 ### Sequence Alteration (Index-based)
 - [x] **`POST /altbyindex/delet`** — Delete bases by start/end index or length.
@@ -147,3 +148,14 @@ model output.
 
 ### ⚠️ Known caveat (flagged 2026-07-08, not yet root-caused)
 - `/analysis/patterninzona` returned HTTP 200 with real output in the smoke test above, but has separately been flagged as not fully operational/reliable in every case. Deprioritized for now per explicit instruction — revisit before relying on this endpoint for anything beyond a smoke test.
+
+---
+
+## Judge Review — Tasks 2–4 (2026-07-09)
+
+- [x] Compact Redis storage / `reconstruct_altered_sequence()` (Task 1) — previously reviewed and closed.
+- [ ] **`GET /get/allsimpleprobas` (Task 2) — `[FAILED]`**: endpoint works and returns 200, but its per-entry `"altered sequence"` field is silently wrong for bounded deletes and non-default-length insert/move/copy-paste (confirmed via live reproduction). Root cause and fix instructions logged in `docs/ai/audits_history.md` → "Judge Review — Tasks 2–4". Routed back to `[WORKER]`.
+- [x] **Surface `/get/allsimpleprobas` in all three frontend proposals (Task 3) — `[DONE]`**: `api.get.allSimpleProbas()` (`client.js`), `workspace.fetchAllSimpleProbas()`; Pipeline `tracked_alterations_simple` block + `ProbaHistoryOutput`; Workbench `HistoryLog.js`'s `TrackedProbabilities` subsection; Compare's Data Source toggle (`delta` vs `proba`) with mode-aware `RankingTable`/`ManhattanChart`/`DetailChart`/`ExportBar`. Reviewed and confirmed correct — does not consume the buggy `"altered sequence"` field (Task 2's bug above), only `acceptor_proba`/`donor_proba` (cached, correct).
+- [x] **Pipeline layout/UX fixes (Task 4) — `[DONE]`**: full-container drop-zone coverage, recipe-block input fields narrowed to ~1/3 width via a new `field__control` class, sequence input relocated above the Output column (session metadata preserved), collapsible recipe blocks via a per-block chevron toggle. Scoped entirely to `frontend/src/views/pipeline/` as specified.
+
+**Sandbox caveat (Tasks 3 & 4):** no `node`/browser/browser-automation tool available, and the project has no frontend build/test step. Verification was static (byte-diff of served files, brace/paren balance, manual trace of `htm` template logic against real backend response shapes) rather than an actual DOM/interaction check — see `audits_history.md` for detail. A human should open all three proposals once before the next release.

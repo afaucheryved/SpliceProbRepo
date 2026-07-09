@@ -193,6 +193,98 @@ class TestReconstructAlteredSequence:
         result = reconstruct_altered_sequence(self.SESSION_ID)
         assert result == altered
 
+    def test_bounded_delete_reconstruction(self):
+        """Delete a bounded range (start + end), not just start-to-end."""
+        base = "a" * 20 + "c" * 20 + "g" * 20 + "t" * 20  # 80bp
+        self._set_base(base)
+        # delete_by_index(start=21, end=40) — delete the c-block
+        # Ground truth: a-block + g-block + t-block = 60bp
+        expected = "a" * 20 + "g" * 20 + "t" * 20
+        # The stored entry (as it now comes from _track_alteration post-fix)
+        # contains the actual altered_sequence, not just a lossy label.
+        self._set_alterations([
+            {
+                "proba_simple": {},
+                "mutation": {"human": "delete:21", "splicing": []},
+                "altered_sequence": expected,
+            }
+        ])
+        self._set_altered(expected)
+        result = reconstruct_altered_sequence(self.SESSION_ID)
+        assert result == expected, (
+            f"Bounded delete failed: expected {len(expected)}bp sequence, "
+            f"got {len(result)}bp"
+        )
+
+    def test_non_default_length_insert_reconstruction(self):
+        """Insert with length != len(pattern) — e.g. length=30."""
+        base = "a" * 20 + "c" * 20 + "g" * 20 + "t" * 20  # 80bp
+        self._set_base(base)
+        # insert(pattern="XXXX", index=10, length=30)
+        # Overwrites 30 bases starting at index 10 with "XXXX"
+        expected = base[:9] + "XXXX" + base[9 + 30:]  # 54bp
+        self._set_alterations([
+            {
+                "proba_simple": {},
+                "mutation": {"human": "insert:XXXX@10", "splicing": []},
+                "altered_sequence": expected,
+            }
+        ])
+        self._set_altered(expected)
+        result = reconstruct_altered_sequence(self.SESSION_ID)
+        assert result == expected, (
+            f"Non-default-length insert failed: expected {len(expected)}bp, "
+            f"got {len(result)}bp"
+        )
+
+    def test_non_default_length_move_reconstruction(self):
+        """Move with length_paste != len(pattern)."""
+        base = "a" * 20 + "c" * 20 + "g" * 20 + "t" * 20  # 80bp
+        self._set_base(base)
+        # move(start_cc=1, end_cc=20, index_paste=40, length_paste=10)
+        # Cut a-block (1-20), paste at index 40, but only overwrite 10 bases
+        # After cut: c-block + g-block + t-block = 60bp
+        # Paste a-block at index 40-10=30 (adjusted), overwriting 10 bases
+        # Expected: c-block(20) + g-block(10) + a-block(20) + g-block(10) + t-block(20) = 70bp
+        cut_seq = base[20:]  # c-block + g-block + t-block = 60bp
+        # Paste at index_paste=40, adjusted for cut: 40-20=20 (0-based 19)
+        # Overwrite 10 bases: cut_seq[:19] + a-block + cut_seq[19+10:]
+        expected = cut_seq[:19] + base[:20] + cut_seq[29:]
+        self._set_alterations([
+            {
+                "proba_simple": {},
+                "mutation": {"human": "move:1-20->@40", "splicing": []},
+                "altered_sequence": expected,
+            }
+        ])
+        self._set_altered(expected)
+        result = reconstruct_altered_sequence(self.SESSION_ID)
+        assert result == expected, (
+            f"Non-default-length move failed: expected {len(expected)}bp, "
+            f"got {len(result)}bp"
+        )
+
+    def test_non_default_length_copy_paste_reconstruction(self):
+        """Copy-paste with length_paste != len(pattern)."""
+        base = "a" * 20 + "c" * 20 + "g" * 20 + "t" * 20  # 80bp
+        self._set_base(base)
+        # copy_past(start_cc=1, end_cc=20, index_paste=40, length_paste=10)
+        # Copy a-block, paste at index 40, overwriting only 10 bases
+        expected = base[:39] + base[:20] + base[49:]
+        self._set_alterations([
+            {
+                "proba_simple": {},
+                "mutation": {"human": "copy_paste:1-20@40", "splicing": []},
+                "altered_sequence": expected,
+            }
+        ])
+        self._set_altered(expected)
+        result = reconstruct_altered_sequence(self.SESSION_ID)
+        assert result == expected, (
+            f"Non-default-length copy_paste failed: expected {len(expected)}bp, "
+            f"got {len(result)}bp"
+        )
+
     def test_splicing_labels_reconstruction(self):
         """Same-length substitution with splicing labels."""
         base = "aaaaaaaaaaaaaaaa"
@@ -206,6 +298,24 @@ class TestReconstructAlteredSequence:
                     "human": "substitution",
                     "splicing": [">p.5.a>c", ">p.8.a>g"],
                 },
+            }
+        ])
+        self._set_altered(expected)
+        result = reconstruct_altered_sequence(self.SESSION_ID)
+        assert result == expected
+
+    def test_backward_compatibility_missing_altered_sequence(self):
+        """Entries without 'altered_sequence' fall back to label-based reconstruction."""
+        base = "atcgatcgatcgatcg"
+        self._set_base(base)
+        # Delete-to-end (the default case that the label encodes correctly)
+        expected = base[:4]
+        self._set_alterations([
+            {
+                "proba_simple": {},
+                "mutation": {"human": "delete:5", "splicing": []},
+                # No "altered_sequence" key — simulates old entries stored
+                # before the fix was deployed.
             }
         ])
         self._set_altered(expected)
@@ -271,3 +381,9 @@ class TestTrackAlterationNoOneHot:
         assert "proba_simple" in entry
         assert "mutation" in entry
         assert entry["mutation"]["human"] == "test_alteration"
+        # Verify the altered_sequence is stored directly (fix for lossy-label bug)
+        assert "altered_sequence" in entry, (
+            "altered_sequence should be persisted in entries for deterministic "
+            "reconstruction (fix for bounded-delete / non-default-length bugs)."
+        )
+        assert entry["altered_sequence"] == "atcgatcg"

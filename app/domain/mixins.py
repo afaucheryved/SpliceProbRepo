@@ -111,6 +111,14 @@ class AlteredSequenceTrackerMixin:
                 "human": human_label,
                 "splicing": splicing_labels,
             },
+            # Persist the altered sequence directly so that reconstruction
+            # (``_apply_single_alteration``) is deterministic regardless of
+            # whether the human-readable label captures every parameter of
+            # the original call (bounded delete, non-default-length
+            # insert/move/copy-paste, etc.). This is cheap — a plain string
+            # of the same length as the sequence — and avoids the entire
+            # class of "lossy label" bugs.
+            "altered_sequence": altered_seq,
         }
         altered_list.append(entry)
         set_session_data(session_id, "altered_sequences", altered_list)
@@ -122,8 +130,13 @@ class AlteredSequenceTrackerMixin:
 def _apply_single_alteration(current: str, entry: Dict[str, Any], session_id: str) -> str:
     """Replay a single tracked alteration entry onto ``current``.
 
-    Best-effort: for operations that cannot be deterministically reconstructed
-    from their human label alone (e.g. random mutations), falls back to the
+    Prefers the stored ``altered_sequence`` from the entry when available
+    (it is the ground truth, unaffected by lossy labels). Falls back to
+    label-based reconstruction for entries created before this field was
+    added (backward compatibility).
+
+    For operations that cannot be deterministically reconstructed from
+    their human label alone (e.g. random mutations), falls back to the
     session's stored ``current_altered_sequence`` and keeps going from there.
 
     Args:
@@ -134,6 +147,15 @@ def _apply_single_alteration(current: str, entry: Dict[str, Any], session_id: st
     Returns:
         The sequence state after applying this entry.
     """
+    # Prefer the stored altered_sequence if present — this is the ground
+    # truth recorded at alteration time, immune to lossy-label bugs.
+    stored_altered = entry.get("altered_sequence")
+    if stored_altered is not None:
+        return stored_altered
+
+    # Fallback: reconstruct from the human-readable label (backward
+    # compatibility for entries stored before the ``altered_sequence``
+    # field was added).
     human_label = entry.get("mutation", {}).get("human", "")
     splicing_labels = entry.get("mutation", {}).get("splicing", [])
 

@@ -3,8 +3,8 @@
 ## Core API Endpoints
 - [x] **`POST /GetSimpleProb/`** — Returns baseline acceptor and donor splicing probabilities for a DNA sequence with optional point mutations.
 - [x] **`POST /GetDeltaScore/`** — Returns the delta (difference) in splicing scores between original and mutated sequences.
-- [x] **`POST /resetgv`** — Resets the internal genetic variant with new sequence/mutations (singleton pattern).
-- [x] **`GET /get/sequence|gv|simpleproba|deltaproba|mutations|alteredsequence`** — Read accessors for the singleton variant's state.
+- [x] **`POST /resetgv`** — Starts/resets a session-bound internal genetic variant with a new sequence/mutations (session-based, not singleton — see `docs/ai/architecture.md` → "Session Management").
+- [x] **`GET /get/sequence|gv|simpleproba|deltaproba|mutations|alteredsequence`** — Read accessors for a session's variant state (`session_id` query param).
 
 ### Sequence Alteration (Index-based)
 - [x] **`POST /altbyindex/delet`** — Delete bases by start/end index or length.
@@ -141,3 +141,6 @@ model output.
 - `fastapi run app/main.py` boots cleanly (all 5 SpliceAI models load, no startup errors).
 - `python test_payloads.py --server http://127.0.0.1:8000` → **11/11 POST endpoints pass**, **6/6 GET accessors pass**, all with real (non-mocked) SpliceAI predictions.
 - `python -m pytest app/test/` → collection no longer crashes; `test_redis_session.py` now fully passes (16/16); remaining failures are pre-existing test debt documented above.
+
+### ⚠️ Known caveat (flagged 2026-07-08, not yet root-caused)
+- `/analysis/patterninzona` returned HTTP 200 with real output in the smoke test above, but has separately been flagged as not fully operational/reliable in every case. Deprioritized for now per explicit instruction — revisit before relying on this endpoint for anything beyond a smoke test.

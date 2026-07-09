@@ -34,9 +34,9 @@ All operations are session-based using **Redis** for multi-user isolation, allow
 | **Matplotlib** | Visualization (used in test/debug scripts) |
 
 ## Current State
-The application is in an **active development / mid-stage state**:
-- Core API endpoints are functional.
-- Session-based multi-user support via Redis has been partially integrated through the `create_internal_variant` factory.
-- Some routers still reference a legacy singleton pattern (`my_internal_genetic_variant` from `initialize_internal_gv`) whose module does not yet exist on disk, indicating ongoing migration from singleton to session-based architecture.
-- Some features are incomplete (e.g., `IndependentScoring` duplicates `Scoring`, the `ProbaLawsFunctions` class has a stub implementation, gradient-based analysis code is commented out).
-- Unit tests exist but are limited in coverage.
+The backend is **functional end-to-end**: `fastapi run app/main.py` boots cleanly and all 11 POST endpoints + 6 GET accessors return real (non-mocked) SpliceAI output, verified via `python test_payloads.py --server http://127.0.0.1:8000`. Full fix history is in `docs/ai/progress.md` and `docs/ai/audits_history.md`.
+- Session-based multi-user support via Redis (`create_internal_variant` factory) is used by **every** router. The former legacy singleton pattern (`my_internal_genetic_variant`) is vestigial — only a manual visualization script (`app/test/test_functions.py`, excluded from pytest) still references it.
+- A frontend has been added: three alternative MVP UIs under `frontend/` (no-build-step, see `frontend/README.md`), switchable via a 3-position toggle.
+- Known caveat: `/analysis/patterninzona` is not confirmed fully reliable in every case (flagged for follow-up investigation; not urgent for now) — see `docs/ai/progress.md`.
+- Remaining known issues: the `InternalGeneticVariant` mega-class (9-parent multiple inheritance) is still unrefactored, `ProbaLawsFunctions.mutate_base()` is still a stub, and gradient-based (Integrated Gradients) analysis code is still commented out in `genomic_analysis.py`. See `docs/ai/architecture.md` → "Known Architectural Issues".
+- Unit test coverage: most of the previously-broken test infrastructure now runs (`pytest` no longer crashes at collection), but a large batch of tests (~43) predate an internal refactor and need rewriting — see `docs/ai/progress.md` → "Known remaining test debt".

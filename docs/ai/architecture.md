@@ -7,9 +7,18 @@ SpliceProbRepo/
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
+├── pytest.ini                       # excludes test_functions.py (manual script) from pytest collection
+├── test_payloads.py                 # standalone end-to-end smoke script (POSTs every endpoint against a live server)
+├── notes_human.txt                  # human session notes (not AI-maintained)
 ├── docs/
 │   └── ai/                          # AI Memory Bank (this directory)
+│       ├── project_brief.md
+│       ├── architecture.md
+│       ├── progress.md
+│       ├── active_context.md
+│       └── audits_history.md        # archived audit/bug-fix history
 ├── .clinerules                      # AI behavior instructions
+├── frontend/                        # 3 frontend MVP proposals (see "Frontend Layer" below and frontend/README.md)
 └── app/
     ├── __init__.py
     ├── main.py                      # FastAPI application entry point
@@ -124,22 +133,24 @@ SpliceProbRepo/
 | `/mutateindependently` | POST | `alteration_radom.py` | Mutate each base independently by probability matrix |
 | `/analysis/patterninzona` | POST | `analysis_router.py` | Find most impactful windowed mutations in zones of interest |
 
-### 3. Session Management & Two Variant Paradigms
+### 3. Session Management
 
-There are **two competing architectural patterns** in the codebase:
+The codebase has fully migrated to a **session-based (Factory + Redis) pattern** —
+**every** router (`simple_router.py`, `delta_router.py`, `alteration_byindex_router.py`,
+`alteration_bypattern_router.py`, `get_router.py`, `resetgv_router.py`, `analysis_router.py`,
+`alteration_radom.py`) now uses `create_internal_variant()`. The former singleton/session
+duality (documented in earlier revisions of this file) has been resolved.
 
-#### A. Session-based (Newer Pattern — Factory + Redis)
-- Used by: `simple_router.py`, `delta_router.py`, `alteration_byindex_router.py`, `alteration_bypattern_router.py`
 - Flow: `Pydantic GeneticVariant` → `create_internal_variant()` factory → `InternalGeneticVariant` with `session_id`
 - The factory (`app/domain/internal_gv_factory.py`) creates variant instances, stores the base sequence in Redis under `session:{uuid}:base_sequence`, and tracks the current altered sequence under `session:{uuid}:current_altered_sequence`.
 - The `AlteredSequenceTrackerMixin` persists one-hot encodings, probability dictionaries, and SpliceAI mutation labels to Redis under `session:{uuid}:altered_sequences`.
 - Session data has a TTL of 30 minutes.
+- If no real Redis server is reachable, `app/services/redis_session.py` transparently falls back to an in-memory `fakeredis` client.
 
-#### B. Singleton-based (Legacy Pattern)
-- Used by: `get_router.py`, `resetgv_router.py`, `analysis_router.py`, `alteration_radom.py`
-- References `my_internal_genetic_variant` imported from `app.domain.initialization.initialize_internal_gv`
-- **This module does not exist yet on disk** — it must be created for these routers to function.
-- This pattern uses a single global instance, incompatible with multi-user isolation.
+#### Legacy singleton (vestigial, not used by any live endpoint)
+- `app/domain/initialization/initialize_internal_gv.py` still defines a global `my_internal_genetic_variant` instance.
+- It is imported **only** by `app/test/test_functions.py` (a manual/script-based tool, excluded from pytest via `pytest.ini`) — no router references it anymore.
+- Safe to remove once `test_functions.py` is updated or retired; kept for now for backward compatibility with that script.
 
 ### 4. InternalGeneticVariant (Domain Mega-Class)
 This is the central domain object, built via **multiple inheritance** from 9 parent classes:
@@ -184,29 +195,45 @@ Client POST /GetDeltaScore/
 ```
 
 ### 7. IndependentGeneticVariant (Alternative Path)
-- A simpler variant that inherits only from `IndependentGeneralServices` (duplicating logic from `GeneralServices`).
-- Used by `genomic_analysis.py` for zone detection analysis.
-- Self-contained: applies mutations, computes proba_delta via SpliceAI, and scores results.
+- A simpler variant that inherits only from `IndependentGeneralServices`, which now only overrides the `_mutations_target_attr` class attribute (`"altered_sequence"` instead of `"sequence"`) — the former near-duplicate implementation was eliminated.
+- Used by `genomic_analysis.py` for zone detection analysis (`_zona()`, `pattern_in_zona()`).
+- Self-contained: applies mutations onto `altered_sequence`, computes proba_delta via SpliceAI, and scores results. Callers must seed `altered_sequence` with a real, correctly-sized sequence (e.g. a copy of `sequence`) — mutations are applied by 1-based position, so an empty or placeholder `altered_sequence` raises `IndexError`.
 
 ### 8. Type System (`app/schemas/typing.py`)
 Custom type aliases used throughout:
 - `genome` = `str` (DNA sequence, ATCG only)
 - `mut` = `str` (mutation string like `>p.8.a>c`)
 - `JSON` = `dict[str, Any]`
-- `MutationMatrix` = `np.ndarray[np.float64]` (4×4 probability matrix)
+- `MutationMatrix` = `np.ndarray[np.float64]` (4×4 probability matrix) — used as a plain Python type hint in the domain layer (`sequence_functions.py`, `proba_laws_functions.py`). **Not** used as a Pydantic field type: `alteration_radom.py`'s `MutateIndependentlyParameters.prob_mat` uses `list[list[float]]` instead, since Pydantic v2 cannot generate a schema for a bare `numpy.typing.NDArray` alias. Same JSON wire format either way.
 - `percentage` = `int`
+
+### 9. Frontend Layer (`frontend/`)
+Three alternative frontend MVPs consuming the API above, switchable at runtime via a 3-position toggle. No build step — plain ES modules with Preact + `htm` + Chart.js loaded from a CDN at runtime (no `package.json`/`node_modules`).
+- `frontend/serve.py` — stdlib-only static file server that also reverse-proxies API paths to the FastAPI backend, purely to avoid CORS (the backend registers no CORS middleware) without modifying backend code.
+- `frontend/src/views/pipeline/` — **Pipeline**: CyberChef-style drag-and-drop recipe of blocks, one per backend endpoint.
+- `frontend/src/views/dashboard/` — **Workbench**: dense genome-browser-style researcher dashboard (mutation table, zoomable probability track, zone analysis, alteration toolbox).
+- `frontend/src/views/comparative/` — **Compare**: batch console — score a list of point mutations and rank by impact.
+- `frontend/src/lib/workspace.js` — shared reactive session/sequence store used by all three views; documents the backend's session/mutation persistence quirks in code comments.
+- See `frontend/README.md` for setup/run instructions and a full list of backend behaviors the frontend has to work around (e.g. structural alteration endpoints return `null` and must be followed by a `GET /get/alteredsequence` call).
 
 ## Key Design Patterns
 - **Factory Pattern**: `create_internal_variant()` in `internal_gv_factory.py`
 - **Mixin Pattern**: `AlteredSequenceTrackerMixin` adds Redis persistence to alteration classes
-- **Multiple Inheritance / Composition over Inheritance tension**: `InternalGeneticVariant` inherits from 9 parent classes — this is a "mega-class" anti-pattern that creates tight coupling
+- **Multiple Inheritance / Composition over Inheritance tension**: `InternalGeneticVariant` inherits from 9 parent classes — this is a "mega-class" anti-pattern that creates tight coupling. Still unresolved (see Known Architectural Issues).
 - **Strategy Pattern**: Scoring methods (euclidean, manhattan, pondered, quadratic) selectable via parameter
-- **Decorator Pattern**: `wrapp_calcul` times function execution; `check_initialized` guards singleton access
+- **Decorator Pattern**: `wrapp_calcul` times function execution and prints timing to stdout
 
 ## Known Architectural Issues
-1. **Missing module**: `app/domain/initialization/initialize_internal_gv.py` is imported by 4 routers but does not exist.
-2. **Code duplication**: `GeneralServices` and `IndependentGeneralServices` contain nearly identical logic.
-3. **Code duplication**: `IndependentScoring` and `Scoring` classes are identical.
-4. **Singleton vs Session duality**: The codebase is mid-migration from a global singleton variant to Redis-backed session variants. The two patterns coexist but are incompatible.
-5. **Incomplete features**: `ProbaLawsFunctions.mutate_base()` returns `None` (stub). Gradient-based Integrated Gradients code is commented out in `genomic_analysis.py`.
-6. **Import in `genomic_analysis.py`** references `app.schemas.independant_gv_schema` (French spelling "independant" vs "independent" used inconsistently).
+
+### Resolved (kept here for history — see `docs/ai/audits_history.md` for full details)
+- ~~Missing `initialize_internal_gv.py` module~~ — exists, but is now vestigial (see "Session Management" above).
+- ~~Code duplication between `GeneralServices`/`IndependentGeneralServices`~~ — eliminated.
+- ~~Code duplication between `Scoring`/`IndependentScoring`~~ — eliminated (`IndependentScoring = Scoring` alias).
+- ~~Singleton vs Session duality~~ — resolved; all routers use the session-based factory.
+
+### Still open
+1. **Mega-class inheritance**: `InternalGeneticVariant` inherits from 9 parent classes. Consider composition instead.
+2. **Incomplete features**: `ProbaLawsFunctions.mutate_base()` returns `None` (stub, and appears unused — `RandomAlterationFunctions.proba_law()` in `sequence_functions.py` implements the same concept independently). Gradient-based Integrated Gradients code is commented out in `genomic_analysis.py`.
+3. **Spelling inconsistency**: `app/schemas/independant_gv_schema.py` uses the French spelling "independant" vs "independent" used elsewhere.
+4. **Third-party incompatibility patched locally**: `spliceai.utils.one_hot_encode()` (installed package) calls a NumPy binary-mode API that NumPy 2.x removed. `app/domain/spliceai_calculation.py` now defines a local, output-identical `one_hot_encode()` instead of importing the upstream one — if `spliceai` is ever upgraded to a NumPy-2-compatible release, this local shim could be removed.
+5. **`/analysis/patterninzona` reliability**: endpoint returns 200 with real output in smoke testing (`test_payloads.py`), but has been flagged as not fully reliable/operational in all cases — not yet root-caused. See `docs/ai/progress.md`.

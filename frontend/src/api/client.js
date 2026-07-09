@@ -92,6 +92,11 @@ export const api = {
     deltaProba: (sessionId) => request("GET", "/get/deltaproba" + qs({ session_id: sessionId })),
     mutations: (sessionId) => request("GET", "/get/mutations" + qs({ session_id: sessionId })),
     alteredSequence: (sessionId) => request("GET", "/get/alteredsequence" + qs({ session_id: sessionId })),
+    // -> { "<n>: <mutation.human label>": { acceptor_proba, donor_proba, "altered sequence" }, ... }
+    // One entry per tracked alteration in the session (see AlteredSequenceTrackerMixin),
+    // in chronological order. The "<n>: " prefix disambiguates repeated labels
+    // (e.g. two "mutate_independently" calls would otherwise collide).
+    allSimpleProbas: (sessionId) => request("GET", "/get/allsimpleprobas" + qs({ session_id: sessionId })),
   },
 
   altByIndex: {

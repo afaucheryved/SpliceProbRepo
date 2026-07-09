@@ -101,3 +101,8 @@ NOTES
 - If you ever see a stray "recap" note appended below this line, that's an
   unrelated session-summary feature from the assistant tooling, not part
   of this workflow — safe to ignore or delete.
+
+-----
+recap: Building three SpliceProb frontend MVPs and getting the app fully runnable; backend 
+  and frontend are now both live for you to check at 127.0.0.1:8000 and 127.0.0.1:5500. Next:
+  you review the frontend in a browser. (disable recaps in /config)

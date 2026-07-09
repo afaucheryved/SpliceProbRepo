@@ -44,6 +44,39 @@ function ProbaOutput({ data }) {
   `;
 }
 
+function ProbaHistoryOutput({ data }) {
+  const entries = Object.entries(data ?? {});
+  if (entries.length === 0) {
+    return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
+  }
+  return html`
+    <div>
+      <p class="output-panel__hint">
+        Baseline splicing probability per tracked alteration (one chart per entry, chronological order).
+      </p>
+      ${entries.map(([label, entry]) => {
+        const acceptor = flattenProbaTrack(entry.acceptor_proba);
+        const donor = flattenProbaTrack(entry.donor_proba);
+        return html`
+          <div class="output-panel__history-entry" key=${label}>
+            <p class="output-panel__history-label mono">${label}</p>
+            <${Chart}
+              type="line"
+              height=${160}
+              labels=${acceptor.positions.map((p) => p + 1)}
+              datasets=${[
+                { label: "Acceptor gain", data: acceptor.values, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
+                { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
+              ]}
+              options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
+            />
+          </div>
+        `;
+      })}
+    </div>
+  `;
+}
+
 function DeltaOutput({ data }) {
   const acceptor = flattenDeltaTrack(data.acceptor_proba);
   const donor = flattenDeltaTrack(data.donor_proba);
@@ -90,6 +123,7 @@ export function OutputPanel({ result }) {
     <div class="output-panel">
       ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} />` : null}
       ${kind === "proba" ? html`<${ProbaOutput} data=${data} />` : null}
+      ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} />` : null}
       ${kind === "delta" ? html`<${DeltaOutput} data=${data} />` : null}
       ${kind === "zones" ? html`<${ZonesOutput} data=${data} />` : null}
     </div>

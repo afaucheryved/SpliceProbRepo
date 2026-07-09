@@ -217,3 +217,21 @@
   font-size: 0.75rem;
   color: #9ca3af;
 }
+
+.output-panel__history-entry {
+  border-top: 1px solid var(--app-border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.output-panel__history-entry:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.output-panel__history-label {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 0 0 0.3rem;
+}

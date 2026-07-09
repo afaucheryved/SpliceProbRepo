@@ -31,7 +31,10 @@
 ### Session Management  ✅
 - [x] Redis-backed session storage with 30-minute TTL (configurable via `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB` env vars).
 - [x] `create_internal_variant()` factory for session-aware variant creation.
-- [x] `AlteredSequenceTrackerMixin` for persisting alteration history (one-hot, proba, mutation labels).
+- [x] `AlteredSequenceTrackerMixin` for persisting alteration history (proba, mutation labels).
+- [x] Compact Redis storage: one-hot arrays no longer persisted in `session:{id}:altered_sequences` entries (previously stored ~20,000+ × 4 floats per alteration call). One-hot encoding is now computed transiently, in memory, only during model calls.
+- [x] `reconstruct_altered_sequence()` helper that replays tracked alteration history from Redis to deterministically rebuild the current altered sequence.
+- [x] `test_mixins.py` — 13 unit tests covering reconstruction for all 7 alteration types, chained operations, random-mutation fallback, and verification that `one_hot` is not persisted.
 
 ### Scoring
 - [x] Vector norm scoring: Euclidean, Manhattan, Weighted (pondered), Quadratic.

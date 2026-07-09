@@ -157,6 +157,16 @@ export const BLOCK_DEFINITIONS = [
     run: (params) => workspace.scoreSimple(mutationsFromRows(params.rows)),
   },
   {
+    id: "tracked_alterations_simple",
+    category: "Scoring",
+    label: "Tracked Alterations → Baseline Probability",
+    summary:
+      "Baseline acceptor/donor splicing probability for every structural alteration performed so far in this session (one chart per tracked entry, most recent last).",
+    fields: [],
+    outputKind: "probaHistory",
+    run: () => workspace.fetchAllSimpleProbas(),
+  },
+  {
     id: "zone_analysis",
     category: "Analysis",
     label: "Zone Analysis (PELT)",

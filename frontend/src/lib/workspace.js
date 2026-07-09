@@ -160,6 +160,19 @@ export const workspace = {
     });
   },
 
+  // Baseline probability for every alteration tracked so far in this session
+  // (one entry per successful /altbyindex/*, /altbypattern/* or
+  // /mutateindependently call) -- read-only, does not mutate session state.
+  async fetchAllSimpleProbas() {
+    const sessionId = requireSession();
+    return withBusy(async () => {
+      const data = await api.get.allSimpleProbas(sessionId);
+      setState({ lastResult: { type: "probaHistory", data } });
+      pushHistory("probe", `Baseline probabilities for ${Object.keys(data).length} tracked alteration(s)`);
+      return data;
+    });
+  },
+
   async analyzeZones(params = {}) {
     const sessionId = requireSession();
     return withBusy(async () => {

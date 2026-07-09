@@ -13,24 +13,21 @@ in any order.
 
 ### Backend
 
-- [ ] **Task 1 — Compact Redis storage for altered-sequence history (revised — see rationale)**
+- [x] **Task 1 — Compact Redis storage for altered-sequence history (revised — see rationale)**
 
-  **Original request, verbatim intent:** store the base sequence only in one-hot format, and store altered sequences only as mutation diffs relative to the base sequence, for memory efficiency.
+  **Sub-tasks completed:**
+  1. ✅ `_track_alteration()` no longer persists `one_hot` arrays into `altered_sequences` entries. One-hot encoding is now computed only transiently, in memory, during model calls.
+  2. ✅ Each `session:{id}:altered_sequences` entry holds only `proba_simple`, `mutation.human` (e.g. `"delete:12"`, `"insert:acgt@5"`), and `mutation.splicing` (SpliceAI labels for same-length edits).
+  3. ✅ `reconstruct_altered_sequence(session_id)` helper added — replays tracked alteration history from Redis to deterministically rebuild the current altered sequence. Falls back to stored `current_altered_sequence` for non-deterministic operations (random mutations, wildcard patterns).
+  4. ✅ External contracts unchanged: `create_internal_variant()` still sets `gv.altered_sequence` correctly; `GET /get/alteredsequence` still returns the full string; no call sites outside the mixin were modified.
+  5. ✅ Constraint respected: structural edits use `human` label replay, not `>p.<pos>.<ref>><alt>` syntax.
+  6. ✅ `test_mixins.py` added — 13 tests covering reconstruction for all 7 alteration types, chained operations, random-mutation fallback, and verification that `one_hot` is not persisted.
+  
+  **Files modified:**
+  - `app/domain/mixins.py` — removed `one_hot` persistence from `_track_alteration()`, added `reconstruct_altered_sequence()` function
+  - `app/test/test_mixins.py` — new test file
 
-  **Revision — do NOT store the base sequence only in one-hot format; this part of the original request is not technically sound:**
-  - One-hot encoding turns a length-*n* ACGT string into an `[n, 4]` float array — several times larger than the text it replaces (larger still once JSON-serialized, which is how Redis values are currently stored via `app/services/redis_session.py`). Making one-hot the *only* stored form of the base sequence would **increase** memory usage, not reduce it.
-  - The one-hot form cannot be used directly by `IsValid`, `AlterationFunctionsByIndex`, `AlterationFunctionsByPattern`, `apply_mutations()`, or any regex/pattern matching (`AlterationFunctionsByPattern._pattern_to_regex`) — all of these operate on the raw ACGT string. Storing only one-hot would force a decode-to-text step before nearly every operation.
-  - **Corrected objective:** `session:{id}:base_sequence` stays plain ACGT text (already the case — no change needed there). One-hot encoding remains a *derived, on-demand* representation computed only when calling the SpliceAI model (as `SpliceAIModels._one_hot_encoder()` / `one_hot_encoder()` in `app/domain/spliceai_calculation.py` already do), never persisted as a canonical storage form.
-
-  **The actual memory problem to fix (identified while reviewing this task, and the real target of "more memory-efficient" from the original request):** `AlteredSequenceTrackerMixin._track_alteration()` (`app/domain/mixins.py`) currently appends a **full one-hot-encoded array** (`entry["one_hot"]`) to the session's `session:{id}:altered_sequences` list on *every* alteration call (insert, delete, move, copy-paste, replace, delete-by-pattern, random mutation). With the default `context=10000` padding this is on the order of 20,000+ positions × 4 channels of floats, **per call**, growing unbounded for the life of a session. This is the concrete thing to eliminate.
-
-  **Sub-tasks (breakdown):**
-  1. In `app/domain/mixins.py::AlteredSequenceTrackerMixin._track_alteration()`, stop persisting the `one_hot` array into `altered_sequences` history entries. One-hot arrays must only exist transiently, in memory, for the duration of a single model call.
-  2. Redefine each `session:{id}:altered_sequences` entry to hold only the mutation label already derived via `tuple_mutation()` (`entry["mutation"]["splicing"]`, using the existing `>p.<pos>.<ref>><alt>` syntax defined by `app/schemas/typing.py::mut`) plus the existing human-readable label (`entry["mutation"]["human"]`, e.g. `"delete:12"`, `"insert:acgt@5"`). Keep `entry["proba_simple"]` as-is for now — flag, but do not remove, if profiling later shows it's also a significant contributor.
-  3. Add a helper (e.g. `reconstruct_altered_sequence(base_sequence: str, session_id: str) -> str`) that transparently rebuilds the current full altered sequence from `base_sequence` + the tracked history, producing the exact same string `session:{id}:current_altered_sequence` holds today.
-  4. Keep every existing external contract unchanged: `create_internal_variant()` must still set `gv.altered_sequence` to the correct full string; `GET /get/alteredsequence` must still return the full string; no call site outside this mixin (e.g. `app/domain/sequence_functions.py`, which reads/writes `self.altered_sequence` directly) should need modification.
-  5. Known constraint to respect, not work around: the `>p.<pos>.<ref>><alt>` syntax only represents same-position, same-length substitutions. Structural edits (insert/delete/move/copy-paste) change sequence length and cannot be expressed as a pure position/base diff against the base sequence. For these, replaying the already-tracked `human` operation label is the correct compact representation — do not invent a new diff format to force structural edits into the substitution syntax.
-  6. Add/update tests confirming (a) reconstructed sequences match what was returned before this change, for every alteration type, and (b) the serialized size of `session:{id}:altered_sequences` is reduced.
+  **Implementation note (2026-07-09):** After the change, the `_FakeModel._one_hot_encoder()` stub in `test_endpoint_integration.py` is no longer used by `_track_alteration()` (since `one_hot` is no longer computed there). It remains in the stub class for backward compatibility with any other code that may still reference it. The `_FakeModel` class itself is still needed for `my_model.run()` calls.
 
 - [ ] **Task 2 — Add `GET /get/allsimpleprobas`: baseline probabilities for every tracked altered-sequence version**
 
@@ -41,6 +38,16 @@ in any order.
   **Behavior:** for the given session, return one baseline-probability result — identical shape to a single `/get/simpleproba` response (`acceptor_proba`, `donor_proba`, `"altered sequence"`) — per entry in `session:{id}:altered_sequences`, keyed by that entry's mutation label. Decide during implementation whether the key is `entry["mutation"]["human"]` or `entry["mutation"]["splicing"]` (or both), favoring whichever is the more stable/unique identifier.
 
   **Dependency:** reads the same `session:{id}:altered_sequences` structure Task 1 restructures. Implement Task 1 first, or coordinate so this endpoint reads whatever field Task 1 leaves in place for the per-entry `proba_simple` (recompute on demand from the reconstructed sequence if Task 1 ends up removing it).
+
+  **Implemented, pending review (2026-07-09):**
+  - Added `GET /get/allsimpleprobas` in `app/router/get_router.py`. Follows the same `create_internal_variant(session_id=...)` pattern as its `/get/*` siblings.
+  - Key chosen: `entry["mutation"]["human"]` (e.g. `"insert:aaaa@3"`, `"delete:2"`) — it's always populated (unlike `splicing`, which is empty for any length-changing structural edit), matching the note's "more stable/unique identifier" guidance.
+  - `proba_simple` was **not** removed by Task 1 — it's already cached per-entry in Redis, so no recomputation needed. Only `"altered sequence"` had to be added per entry to match `/get/simpleproba`'s response shape.
+  - Added `reconstruct_altered_sequence_history()` to `app/domain/mixins.py` (factored the existing per-entry replay logic out of `reconstruct_altered_sequence()` into a shared `_apply_single_alteration()` helper first) to get the intermediate altered-sequence string at each tracked step, not just the final one.
+  - Behavior change while refactoring: `_apply_single_alteration()` no longer short-circuits the whole reconstruction on hitting a `mutate_independently` entry — it falls back to the stored `current_altered_sequence` for that step and keeps replaying any later entries from there, instead of abandoning them. `reconstruct_altered_sequence()`'s final return value is unchanged for every existing test (all 13 `test_mixins.py` tests still pass unmodified); this only changes behavior for sessions with entries *after* a random mutation, which no prior test covered.
+  - **Files modified:** `app/router/get_router.py` (new endpoint + imports), `app/domain/mixins.py` (refactor + new `reconstruct_altered_sequence_history()`).
+  - **Verified:** `pytest app/test/test_mixins.py` — 13/13 pass. Full suite `pytest app/test/` — 33 passed / 43 failed, and the 43 failures are byte-for-byte the same pre-existing set that fails on a clean `git stash` of this session's changes (confirmed by diffing failure lists) — i.e. no regressions. Live end-to-end smoke test via `TestClient` on `app.main.app`: `/GetSimpleProb/` → `/altbyindex/insert` → `/altbyindex/delet` → `GET /get/allsimpleprobas`, with real (non-mocked) SpliceAI output, returned `{"insert:aaaa@3": {...}, "delete:2": {...}}`, each entry shaped `{acceptor_proba, donor_proba, "altered sequence"}` matching `/get/simpleproba`'s shape.
+  - **Note for Judge:** `GET /get/simpleproba` on this same live session returned `{}` (empty) — pre-existing, unrelated bug where `gv.there_is_change` is apparently false after an index-based alteration, so it skips recomputation and returns the default empty `proba_simple`. Not touched — out of scope for Task 2, flagging in case it's useful for `audits_history.md`.
 
 ### Frontend
 

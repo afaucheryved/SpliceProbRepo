@@ -6,8 +6,10 @@ import warnings
 
 #local importation
 from app.domain.internal_gv_factory import create_internal_variant
+from app.domain.mixins import reconstruct_altered_sequence_history
 from app.schemas.typing import *
 from app.errors.errors_and_warnings import NotItalisedInternalGeneticVariant
+from app.services.redis_session import get_session_data
 
 router = APIRouter()
 
@@ -83,6 +85,32 @@ async def get_mutations(session_id: str = Query(..., description="Session ID fro
         return gv.mutations
     except Exception as e:
         raise Exception(f"Fail to get the 'mutations' of the current 'internal genetic variant' : {e}")
+
+@router.get("/allsimpleprobas")
+async def get_allsimpleprobas(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):
+    try:
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=session_id,
+        )
+        altered_list = get_session_data(gv.session_id, "altered_sequences") or []
+        sequence_history = reconstruct_altered_sequence_history(gv.session_id)
+
+        result = {}
+        for i, (entry, altered_sequence) in enumerate(zip(altered_list, sequence_history), start=1):
+            # Prefix with the 1-based step index: `mutation.human` alone is not
+            # unique (e.g. "mutate_independently" is the same literal string on
+            # every random-mutation call, and repeating the same insert/delete
+            # twice repeats its label too) -- a plain dict keyed by label would
+            # silently drop all but the last occurrence.
+            label = f"{i}: {entry.get('mutation', {}).get('human', '')}"
+            proba_simple = dict(entry.get("proba_simple", {}))
+            proba_simple["altered sequence"] = altered_sequence
+            result[label] = proba_simple
+        return result
+    except Exception as e:
+        raise Exception(f"Fail to get 'allsimpleprobas' of the current 'internal genetic variant' : {e}")
 
 @router.get("/alteredsequence")
 async def get_alteredsequence(session_id: str = Query(..., description="Session ID from a previous POST /GetSimpleProb/ or /GetDeltaScore/ call")):

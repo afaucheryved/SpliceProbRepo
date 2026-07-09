@@ -16,6 +16,8 @@ function summarize(def, result) {
       return `→ ${result.length.toLocaleString()} bp`;
     case "proba":
       return "→ baseline probability computed";
+    case "probaHistory":
+      return `→ ${Object.keys(result ?? {}).length} tracked alteration(s)`;
     case "delta":
       return "→ delta score computed";
     case "zones":

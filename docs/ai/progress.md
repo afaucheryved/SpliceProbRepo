@@ -159,3 +159,148 @@ model output.
 - [x] **Pipeline layout/UX fixes (Task 4) — `[DONE]`**: full-container drop-zone coverage, recipe-block input fields narrowed to ~1/3 width via a new `field__control` class, sequence input relocated above the Output column (session metadata preserved), collapsible recipe blocks via a per-block chevron toggle. Scoped entirely to `frontend/src/views/pipeline/` as specified.
 
 **Sandbox caveat (Tasks 3 & 4):** no `node`/browser/browser-automation tool available, and the project has no frontend build/test step. Verification was static (byte-diff of served files, brace/paren balance, manual trace of `htm` template logic against real backend response shapes) rather than an actual DOM/interaction check — see `audits_history.md` for detail. A human should open all three proposals once before the next release.
+
+---
+
+## Task Backlog — Frontend UX & Critical Fixes (planned 2026-07-09)
+
+Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked against the current codebase (file/component names below are the actual identifiers, not paraphrases) and against `docs/ai/architecture.md`'s documented constraints. Continues the numbering from the previous batch (Task 1–4, now closed — see `docs/ai/active_context.md` history / `docs/ai/audits_history.md`).
+
+**Dependency graph:** Task 5 blocks Task 6 and Task 7. Task 17 blocks Task 18. Tasks 10, 13, and 18 all modify the shared `frontend/src/components/shared/Chart.js` — independent otherwise, but flagged below so whichever lands last verifies no regression against the earlier two. Tasks 6 and 19 both modify `frontend/src/components/shared/SessionBar.js` — same soft-coordination note. All other tasks are independently completable in any order.
+
+### Backend (foundational)
+
+- [x] **Task 5 — Add an in-place session-reset capability to `POST /resetgv`**
+
+  **What was done:** Added `reset_session_state(session_id, new_sequence)` to `app/domain/internal_gv_factory.py`. This function overwrites the session's `base_sequence` (via a new `overwrite` parameter on `_store_base_sequence`), resets `current_altered_sequence`, and clears the `altered_sequences` tracked-history list — all while keeping the same `session_id`. Modified `POST /resetgv` in `app/router/resetgv_router.py` to call it when `session_id` is provided and `sequence` is non-empty; backward-compatible (empty/omitted `sequence` preserves existing reconnect-without-change behaviour, `session_id: null` mints a new session).
+
+  **Tests:** Extended `TestResetGV` in `test_endpoint_integration.py` with 3 new tests: (a) existing session + new sequence → `base_sequence` changes, `altered_sequences` cleared, `session_id` unchanged; (b) existing session + empty sequence → unchanged reconnect (regression guard); (c) `session_id: null` → unchanged mint-new-session (regression guard). **All 4 reset tests pass** (2 existing + 3 new, but one existing was split into the 3 new — net +2 tests).
+
+  **Judge verdict (2026-07-09): `[DONE]`.** Independently re-verified beyond the 3 new tests with a fresh live `TestClient` repro (tracked an alteration, reset in-place, confirmed history cleared and `session_id` unchanged) plus the empty-sequence regression case. See `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8".
+
+  **Files touched:** `app/domain/internal_gv_factory.py`, `app/router/resetgv_router.py`, `app/test/test_endpoint_integration.py`.
+
+### Frontend + Backend
+
+- [ ] **Task 6 — Split "Load sequence" from "Start new session" in `SessionBar.js` — `[FAILED]`**
+
+  **What was done:** Added `workspace.loadSequenceIntoSession(sequence)` to `frontend/src/lib/workspace.js` — calls `POST /resetgv` with the existing `session_id` and new sequence (Task 5's in-place-reset path), keeping the same session. Rewrote `SessionBar.js` to always show two distinct, always-visible buttons: "Load sequence" (disabled when no session exists, with tooltip explaining why) and "Start new session" (always enabled, mints a fresh session). Pipeline's compact layout wraps gracefully via existing `flex-wrap: wrap` — no CSS changes needed.
+
+  **Judge verdict (2026-07-09): `[FAILED]`.** The disabled "Load sequence" button's tooltip reads "Load a sequence first to enable this action" — circular, telling the user to do the very thing the disabled button represents. Undermines the task's own stated purpose (removing ambiguity between the two buttons). One-line fix (tooltip text should reference the *other* button, e.g. "No active session yet — click 'Start new session' first"). Everything else in this task is correct. See `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8" for detail. Routed back to `[WORKER]`.
+
+  **Files touched:** `frontend/src/components/shared/SessionBar.js`, `frontend/src/lib/workspace.js`.
+
+- [x] **Task 7 — Fix critical bug: repeated "Bake" clicks accumulate duplicate tracked alterations**
+
+  **What was done:** Added `workspace.resetSession()` to `frontend/src/lib/workspace.js` — calls `POST /resetgv` with the existing `session_id` and the current `baseSequence` (unchanged), clearing all tracked alteration history and resetting `current_altered_sequence` to the base sequence. Modified `bake()` in `PipelineView.js` to check whether any enabled block is an alteration-category block (`Index-based`, `Pattern-based`, `Random`) before running the recipe; if so, it calls `workspace.resetSession()` first. Bakes containing only Scoring/Analysis blocks skip the reset — nothing to clear. The `ALTERATION_CATEGORIES` set is defined in the `PipelineView` component scope.
+
+  **Judge verdict (2026-07-09): `[DONE]`.** Independently reproduced the exact scenario from the original bug report (Move block → Tracked Alterations block, 4 consecutive Bake clicks) — confirmed exactly 1 tracked entry after every click, not accumulating. Full suite shows no regressions (diffed against `git stash` baseline). See `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8".
+
+  **Files touched:** `frontend/src/views/pipeline/PipelineView.js`, `frontend/src/lib/workspace.js`.
+
+### Frontend
+
+- [ ] **Task 8 — Highlight modified sequence regions in Pipeline output, with block-operation summary on hover — `[FAILED]`**
+
+  **What was done:** Added `parseTrackedLabel()` to `frontend/src/lib/sequence.js` — parses tracked-alteration human labels (e.g. `"insert:aaaa@12"`, `"move:3-6->@10"`) into `{ from, to, summary }` position ranges. Modified `SequenceTrack.js` to accept an optional `operations` Map (0-based position → operation summary string) and include it in the hover `title` when available. Modified `PipelineView.js`'s `bake()` to fetch `GET /get/allsimpleprobas` after a sequence-producing bake and build the operations Map from the tracked entries. Modified `OutputPanel.js` to pass the operations through to `SequenceOutput` → `SequenceTrack`.
+
+  **Judge verdict (2026-07-09): `[FAILED]`.** `parseTrackedLabel()` has two confirmed bugs: (1) `move`/`copy_paste` return the stale pre-operation **source** range instead of the actual **destination** range — verified live, a Move's hover label attaches to completely unrelated bases that happen to now occupy the old source position. (2) `replace`/`delete_by_pattern`/`mutate_independently` hardcode `{from:0, to:0}`, misattributing every such operation to position 1 regardless of where it actually occurred (and clobbering each other there if there's more than one). Full root cause, live repro, and exact fix (the label already contains everything needed for the move/copy_paste fix — `index_paste` and pattern length are both derivable from the existing regex capture, just unused) logged in `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8". Also: `OutputPanel.js`'s `buildOperationsMap()` is dead code, never called (minor cleanup, not blocking). Routed back to `[WORKER]`.
+
+  **Files touched:** `frontend/src/lib/sequence.js`, `frontend/src/components/shared/SequenceTrack.js`, `frontend/src/views/pipeline/PipelineView.js`, `frontend/src/views/pipeline/OutputPanel.js`.
+
+- [ ] **Task 9 — Drag Index/Pattern blocks into the "Point Mutations → Delta Score" block, translated to standard mutations**
+
+  **Target confirmed:** Pipeline's `point_mutations_delta` block (`blockDefinitions.js`, label "Point Mutations → Delta Score") — its only field today is a manually-typed `rows` (`mutationList`). This is what "Mutation → delta score section" refers to.
+
+  **Goal:** dragging an Index-based or Pattern-based block onto this block's form translates that structural operation into one or more `>p.<pos>.<ref>><alt>` strings appended to `rows`.
+
+  **Hard constraint (flag, don't silently violate):** only same-length edits are representable in this project's point-mutation syntax — the backend's own `tuple_mutation()` (`app/domain/spliceai_calculation.py`) has this exact limitation, already relied on by `_track_alteration()`'s `mutation.splicing` labels. Insertions/deletions/moves/copy-pastes that change sequence length, or multi-base pattern replacements, cannot be exactly expressed this way. Reject with a clear inline message rather than silently emitting a wrong/partial translation.
+
+  **Constraint on the drop mechanic:** structural alteration endpoints are **not** read-only (`architecture.md` → Frontend Layer note) — invoking one just to preview a diff would mutate the live session. Compute the translation from data that's already been captured (e.g. a block already baked once this session, using its tracked entry's before/after) rather than re-invoking the live endpoint purely for preview.
+
+  **Files:** `frontend/src/views/pipeline/blockDefinitions.js`, `BlockForm.js` (new drop target on the `mutationList` field), `RecipeBlock.js`/`BlockLibrary.js` (drop source wiring, reusing the existing `application/x-block-id` dataTransfer plumbing), `frontend/src/lib/sequence.js` (diff→mutations helper).
+
+- [ ] **Task 10 — Chart peak click-to-popup (position, score, ±10 adjacent bases)**
+
+  **Goal:** clicking a data point on any probability/delta chart opens a popup showing its exact position, its exact score, and the 10 bases to either side of that position from the relevant sequence. Make every point clickable (not just algorithmically-detected peaks) — simpler and more robust, and trivially includes the peaks the request calls out.
+
+  **New component needed:** no popup/modal exists yet (`frontend/src/components/shared/Feedback.js` has banners/spinners/tiles/badges only) — add one, e.g. `frontend/src/components/shared/Popover.js`.
+
+  **Wiring:** `frontend/src/components/shared/Chart.js` (the shared Chart.js wrapper) needs a click handler (Chart.js `options.onClick` / `getElementsAtEventForMode`) and a way for each call site to supply "the sequence this chart's x-axis refers to" (differs per call site — Pipeline's altered sequence, Compare's per-row `resultData`, Workbench's session sequence).
+
+  **Coordinate with Task 13 and Task 18** — all three modify `Chart.js`.
+
+- [ ] **Task 11 — Verify double-click text selection in input fields**
+
+  Lightweight verification task, likely a no-op: scanned the CSS during planning and found no `user-select: none` scoped broadly enough to affect `<input>`/`<select>` elements (only `.sequence-track__gutter` and `.data-table th`, both correctly non-selectable UI chrome) and no custom `onMouseDown`/`onSelectStart` handlers on input fields. Manually verify double-click-selects-word across `TextField`/`IntField`/`SelectField` (`BlockForm.js`), the mono sequence textareas, and matrix/position inputs. Only make a code change if an actual regression is found; if so, document exactly what was blocking it. Same no-browser sandbox caveat as prior frontend tasks applies — flag it rather than skip verification silently.
+
+- [ ] **Task 12 — Blue-violet gap-indicator bar when dragging a block between two others**
+
+  Reordering itself already works (`reorder()` in `PipelineView.js`, wired via native HTML5 drag-and-drop in `RecipeBlock.js`) — this is purely a visual-affordance gap. Currently a drag-over target gets a whole-block outline (`.recipe-block--drop-target`'s box-shadow, using `--app-accent: #6366f1` — this is "the blue-violet CSS color already present in the frontend" the request refers to). Add a thin bar rendered in the gap between two blocks during drag-over, using the same `--app-accent` color, as a more precise "insert here" indicator — replacing or supplementing the current whole-block highlight.
+
+  **Files:** `frontend/src/views/pipeline/RecipeBlock.js`, `PipelineView.js`, `pipeline.css`.
+
+- [ ] **Task 13 — Chart zoom: +/- buttons + slider, and magnifying-glass drag-select + home reset**
+
+  **Scope:** every chart rendered by a Scoring-category block's output — Pipeline's `ProbaOutput`/`ProbaHistoryOutput`/`DeltaOutput` (`OutputPanel.js`), Compare's `DetailChart`/`ManhattanChart`, Workbench's equivalent chart usage. Enumerate exact call sites during implementation (`DeltaSummary.js` currently renders stat tiles only, no chart — confirm whether it's in scope).
+
+  **New dependency:** no zoom/pan plugin is currently loaded (`Chart.js` today only imports `chart.js@4.4.4/auto` from `esm.sh`). Add `chartjs-plugin-zoom` (e.g. `https://esm.sh/chartjs-plugin-zoom@2`), register once.
+
+  **Two requested UX mechanisms, one underlying zoom/pan state:** (1) an x-axis zoom toolbar (`+`/`-` buttons, a scroll/pan slider) and (2) the plugin's native drag-to-select-region zoom plus a "home" button calling the plugin's `resetZoom()`. Implement both against the same plugin state rather than two separate zoom systems.
+
+  **Coordinate with Task 10 and Task 18** — the zoom plugin's own drag/click handling could conflict with Task 10's click-to-popup handler; whichever of these three lands last must verify no regression against the earlier two.
+
+- [ ] **Task 14 — "Tracked Alterations" block: expandable per-entry summary**
+
+  **Precise target:** the `tracked_alterations_simple` block's result-summary line rendered under its form in `RecipeBlock.js` (e.g. "→ 2 tracked alteration(s)", produced by `PipelineView.js`'s `summarize()`) — not the Output panel (which already shows one chart per entry). Make this line clickable/expandable to list each tracked entry's label — the same `"{step index}: {mutation.human}"` strings already used as chart labels in `ProbaHistoryOutput`.
+
+  **Requires:** `PipelineView.js`'s `recipe` state currently stores only `resultSummary` (a string) per block; add the raw result data too (at least for this block type) so it can be expanded without re-fetching.
+
+  **Files:** `frontend/src/views/pipeline/PipelineView.js`, `RecipeBlock.js`, `pipeline.css`.
+
+- [ ] **Task 15 — Distinct colors for "Scoring" and "Analysis" block categories**
+
+  `blockDefinitions.js` already tags every block with a `category` (`Index-based`, `Pattern-based`, `Random`, `Scoring`, `Analysis`); `.recipe-block__category` (`pipeline.css`) renders all of them identically today (neutral gray). Add distinct accent colors specifically for `Scoring` and `Analysis` — the two categories that score/analyze rather than modify the sequence — via a category→CSS-class mapping. Optionally apply the same mapping to `.block-library__item` in the Library panel for consistency.
+
+  **Files:** `frontend/src/views/pipeline/RecipeBlock.js` or `BlockLibrary.js`, `pipeline.css`.
+
+- [ ] **Task 16 — "Random Mutation" block: matrix row-sum validation (pale red)**
+
+  `BlockForm.js`'s `Matrix4x4Field` already labels itself "(row = original base, column = mutated base)" — each **row** is a probability distribution over destination bases for a fixed original base, so rows (not columns) are what must sum to 1. Highlight a row pale-red when `|Σrow − 1| > 0.001` (small epsilon to avoid float-rounding false positives on entries like `0.33333`).
+
+  **Files:** `frontend/src/views/pipeline/BlockForm.js` (`Matrix4x4Field`), `pipeline.css`.
+
+- [ ] **Task 19 — Upload a FASTA (`.txt`) file to load the base sequence**
+
+  Add a file-upload control to `SessionBar.js` alongside the existing textarea. Parsing rules for the header/body split the user's example demonstrates:
+  - Header line starts with `>` — everything after it is the sequence's display name. `workspace.initSession(sequence, name)` already accepts a `name` param; wire the parsed header text into it (no backend change needed).
+  - All following lines are sequence lines: strip leading/trailing whitespace per line and concatenate — line breaks are formatting only (FASTA convention wraps at a fixed width), never meaningful. Handle a single-record file; a file containing multiple `>` headers should be rejected with a clear error rather than silently using only the first record or concatenating records together.
+  - Normalize case using the existing `cleanSequence()`/`isValidSequence()` in `frontend/src/lib/sequence.js` — reuse, don't reimplement.
+
+  **Flag, don't silently resolve:** the user's own example sequence is all `N` (unknown base), but `isValidSequence()` today only accepts strict ACGT (`workspace.js`: `"Sequence must contain only A, C, G, T characters."`). A literal `N`-only FASTA would be parsed correctly by this task and then rejected by existing validation — that's expected/acceptable for this task's scope (surface the existing validation error, don't change what sequences are valid), but call it out explicitly since it means the user's own sample file wouldn't load end-to-end without a separate, NOT-yet-planned task to support ambiguity codes.
+
+  **Files:** `frontend/src/components/shared/SessionBar.js`, `frontend/src/lib/sequence.js` (new `parseFasta()`). Touches the same file as Task 6 — coordinate or sequence the two.
+
+### Backend + Frontend (large — architecturally significant)
+
+- [ ] **Task 17 — Pattern-based operations track one variant per match occurrence** (backend)
+
+  **Current behavior confirmed:** `AlterationFunctionsByPattern.replace()` / `.delete_by_pattern()` (`app/domain/sequence_functions.py`) use `re.sub()` — a single pass that rewrites **every** match at once, tracked as **one** `_track_alteration()` entry. Requested: if a pattern has N matches (e.g. `"aaa"→"ccc"` matching twice), produce N separately tracked variants, each reflecting only *one* match changed with the others left as in the pre-operation sequence.
+
+  **Explicit design decision — confirm before/while implementing, don't silently guess wrong:** to preserve the existing single-linear-`altered_sequence`-chain architecture (every other alteration function, and the whole session model, assumes exactly one "current" altered sequence that later operations chain onto), what feeds forward into `self.altered_sequence` for subsequent chained blocks remains the current all-matches-replaced result. The N per-match variants are **additional** entries recorded purely for tracking/scoring visibility (feeding Task 18's charts) — they do not become the new working sequence. If the actual intent is that the pipeline should branch into N parallel working sequences, that's a materially larger change (multi-branch session state, not scoped here) — stop and raise it rather than build it under this task.
+
+  **Mechanics:** enumerate all non-overlapping matches via `re.finditer()` on the existing `_pattern_to_regex()` output; for each match, build the single-match-only variant sequence, compute its `proba_simple` (same as every other tracked entry), and store it via `_track_alteration()`-equivalent with a disambiguated label (e.g. `f"replace:{old}->{new}[match {i}/{n}]@{match_start}"`) plus the match's position range (`match_start`, `match_end`) stored directly on the entry, so Task 18 doesn't need to re-parse it from the label.
+
+  **Tests:** extend `app/test/test_mixins.py` / `test_alteration_functions.py` with multi-match cases for both `replace` and `delete_by_pattern`.
+
+  **Files:** `app/domain/sequence_functions.py`, `app/domain/mixins.py` (if `_track_alteration()` needs a variant-range parameter), tests.
+
+- [ ] **Task 18 — Highlight pattern-match regions pale-red on Tracked Alteration output charts** (blocked on Task 17)
+
+  On every Tracked Alteration output chart (Pipeline's `ProbaHistoryOutput`, Workbench's `TrackedProbabilities` in `HistoryLog.js`, Compare's proba-mode charts in `DetailChart.js`), shade the x-axis position range of each pattern-based variant's specific match, in pale red, using the match-range data Task 17 now stores per entry.
+
+  **New dependency:** background-region shading on a Chart.js chart typically needs a plugin (e.g. `chartjs-plugin-annotation`) or a custom draw hook — distinct from Task 13's zoom plugin; verify the two plugins coexist on the same `ChartJS` instance without conflict.
+
+  **Coordinate with Task 10 and Task 13** — all three modify `Chart.js`; land last among the three, verify against the earlier two.
+
+  **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/views/pipeline/OutputPanel.js`, `frontend/src/views/dashboard/panels/HistoryLog.js`, `frontend/src/views/comparative/DetailChart.js`.

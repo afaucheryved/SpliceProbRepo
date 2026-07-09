@@ -7,7 +7,12 @@ const MAX_RENDERED = 3000;
 // Monospace FASTA-style sequence viewer: 60 bases/row, position gutter,
 // optional per-base diff highlighting against `reference`, optional
 // selection callback for click-to-pick-an-index workflows.
-export function SequenceTrack({ sequence = "", reference = null, onBaseClick = null, highlightRanges = [] }) {
+//
+// `operations` is an optional Map from 0-based position index to a
+// human-readable operation summary string (e.g. "Move 3-6 → @10").
+// When a base is changed and has an associated operation, the hover
+// title includes both the base diff and the operation summary.
+export function SequenceTrack({ sequence = "", reference = null, onBaseClick = null, highlightRanges = [], operations = null }) {
   if (!sequence) {
     return html`<div class="sequence-track sequence-track--empty">No sequence loaded.</div>`;
   }
@@ -42,12 +47,17 @@ export function SequenceTrack({ sequence = "", reference = null, onBaseClick = n
                 ]
                   .filter(Boolean)
                   .join(" ");
+                const opTitle = operations?.get(index);
+                const baseTitle = changed
+                  ? `position ${index + 1}: ${refBase}→${base}`
+                  : `position ${index + 1}`;
+                const title = opTitle ? `${baseTitle} — ${opTitle}` : baseTitle;
                 return html`
                   <span
                     key=${index}
                     class=${cls}
                     style=${`color:${baseColor(base)}`}
-                    title=${changed ? `position ${index + 1}: ${refBase}→${base}` : `position ${index + 1}`}
+                    title=${title}
                     onClick=${onBaseClick ? () => onBaseClick(index, base) : null}
                   >${base.toUpperCase()}</span>
                 `;

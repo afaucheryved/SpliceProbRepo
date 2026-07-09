@@ -15,14 +15,16 @@ from app.schemas.internal_gv_schema import InternalGeneticVariant
 from app.services.redis_session import get_session_data, set_session_data
 
 
-def _store_base_sequence(session_id: str, sequence: str) -> None:
+def _store_base_sequence(session_id: str, sequence: str, overwrite: bool = False) -> None:
     """Store the original (base) sequence for a session.
 
-    The base sequence is stored under the key ``base_sequence``. If the key
-    already exists we keep the existing value to avoid overwriting data from a
-    previous request.
+    By default, the base sequence is stored under the key ``base_sequence``.
+    If the key already exists we keep the existing value to avoid overwriting
+    data from a previous request.  Pass ``overwrite=True`` to force a write
+    regardless of whether the key already exists (used by
+    :func:`reset_session_state`).
     """
-    if get_session_data(session_id, "base_sequence") is None:
+    if overwrite or get_session_data(session_id, "base_sequence") is None:
         set_session_data(session_id, "base_sequence", sequence)
 
 
@@ -84,3 +86,23 @@ def create_internal_variant(
     else:
         gv.altered_sequence = sequence
     return gv
+
+
+def reset_session_state(session_id: str, new_sequence: str) -> None:
+    """Reset an existing session's state to a new base sequence.
+
+    Overwrites the stored ``base_sequence``, sets ``current_altered_sequence``
+    to the new sequence, and clears the ``altered_sequences`` tracked-history
+    list — all while keeping the same ``session_id``.
+
+    Args:
+        session_id: The existing session identifier to reset.
+        new_sequence: The new base sequence to adopt.
+    """
+    # Overwrite the base sequence (``overwrite=True`` bypasses the write-once
+    # guard that ``_store_base_sequence`` normally enforces).
+    _store_base_sequence(session_id, new_sequence, overwrite=True)
+    # Reset the current altered sequence to the new base sequence.
+    _store_current_altered(session_id, new_sequence)
+    # Clear the tracked alteration history.
+    set_session_data(session_id, "altered_sequences", [])

@@ -105,6 +105,61 @@ export const workspace = {
     });
   },
 
+  // Changes the base sequence of the *current* session in-place, without
+  // creating a new session_id. Calls POST /resetgv with the existing
+  // session_id and new sequence (Task 5's in-place-reset path).
+  async loadSequenceIntoSession(sequence, name = "workspace") {
+    const clean = cleanSequence(sequence);
+    if (!isValidSequence(clean)) {
+      const err = new Error("Sequence must contain only A, C, G, T characters.");
+      setState({ lastError: err.message });
+      throw err;
+    }
+    const sessionId = requireSession();
+    return withBusy(async () => {
+      const result = await api.resetGv({
+        name,
+        sequence: clean,
+        mutations: [""],
+        altered_sequence: "",
+        session_id: sessionId,
+      });
+      setState({
+        name,
+        baseSequence: clean,
+        alteredSequence: clean,
+        lastResult: null,
+      });
+      pushHistory("init", `Sequence loaded into session (${clean.length} bp)`, { session_id: sessionId });
+      return result;
+    });
+  },
+
+  // Resets the current session's altered sequence back to the base sequence,
+  // clearing all tracked alteration history — without changing the session_id
+  // or the base sequence itself. Used by the Pipeline's "Bake" to ensure each
+  // bake starts from a clean slate (Task 7).
+  async resetSession() {
+    const sessionId = requireSession();
+    const base = state.baseSequence;
+    if (!base) throw new Error("No base sequence loaded.");
+    return withBusy(async () => {
+      const result = await api.resetGv({
+        name: state.name,
+        sequence: base,
+        mutations: [""],
+        altered_sequence: "",
+        session_id: sessionId,
+      });
+      setState({
+        alteredSequence: base,
+        lastResult: null,
+      });
+      pushHistory("init", "Session reset for re-bake");
+      return result;
+    });
+  },
+
   async refreshAlteredSequence() {
     const sessionId = requireSession();
     return withBusy(async () => {

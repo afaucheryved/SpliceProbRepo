@@ -82,6 +82,63 @@ export function flattenDeltaTrack(deltaByIndex) {
   return { positions: indices, values, proportions };
 }
 
+// Parse a tracked-alteration human label (e.g. "insert:aaaa@12", "delete:2",
+// "move:3-6->@10", "copy_paste:1-5@10", "replace:acgt->tgca",
+// "delete_by_pattern:acgt") into a position range [from, to] (0-based) and a
+// human-readable summary.
+//
+// Returns null if the label cannot be parsed.
+export function parseTrackedLabel(label) {
+  // Strip step prefix like "3: " or "5: " (Compare uses this format).
+  const body = label.replace(/^\d+:\s*/, "");
+
+  // insert:{pattern}@{index}
+  let m = body.match(/^insert:(.+)@(\d+)$/);
+  if (m) {
+    const idx = Number(m[2]) - 1; // convert to 0-based
+    const len = m[1].length;
+    return { from: idx, to: idx + len - 1, summary: body };
+  }
+
+  // delete:{start}
+  m = body.match(/^delete:(\d+)$/);
+  if (m) {
+    const start = Number(m[1]) - 1;
+    return { from: start, to: start, summary: body };
+  }
+
+  // move:{start_cc}-{end_cc}->@{index_paste}
+  m = body.match(/^move:(\d+)-(\d+)->@(\d+)$/);
+  if (m) {
+    return { from: Number(m[1]) - 1, to: Number(m[2]) - 1, summary: body };
+  }
+
+  // copy_paste:{start_cc}-{end_cc}@{index_paste}
+  m = body.match(/^copy_paste:(\d+)-(\d+)@(\d+)$/);
+  if (m) {
+    return { from: Number(m[1]) - 1, to: Number(m[2]) - 1, summary: body };
+  }
+
+  // replace:{old}->{new}
+  m = body.match(/^replace:(.+)->(.+)$/);
+  if (m) {
+    return { from: 0, to: 0, summary: body };
+  }
+
+  // delete_by_pattern:{pattern}
+  m = body.match(/^delete_by_pattern:(.+)$/);
+  if (m) {
+    return { from: 0, to: 0, summary: body };
+  }
+
+  // mutate_independently
+  if (body === "mutate_independently") {
+    return { from: 0, to: 0, summary: "Random mutation" };
+  }
+
+  return null;
+}
+
 export function downloadFile(filename, content, mime = "application/json") {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);

@@ -165,6 +165,7 @@ class TestResetGV:
 
     @pytest.mark.asyncio
     async def test_reset_with_new_sequence(self, async_client):
+        """Mint a new session (session_id: null) — original behaviour."""
         payload = {
             "name": "reset_test",
             "sequence": "gggggggggg",
@@ -177,6 +178,94 @@ class TestResetGV:
         assert "session_id" in data
         # The reset endpoint returns the variant attributes
         assert "sequence" in data or "session_id" in data
+
+    @pytest.mark.asyncio
+    async def test_reset_existing_session_new_sequence(self, async_client):
+        """Existing session_id + new sequence → base_sequence changes,
+        altered_sequences cleared, session_id unchanged."""
+        # 1. Create a session with the original sequence (via /resetgv).
+        create_payload = {
+            "name": "reset_test",
+            "sequence": "cccccccccc",
+            "mutations": [""],
+            "session_id": None,
+        }
+        create_resp = await async_client.post(self.ENDPOINT, json=create_payload)
+        assert create_resp.status_code == 200
+        sid = create_resp.json()["session_id"]
+
+        # 2. Verify the base_sequence was set.
+        seq_resp = await async_client.get(f"/get/sequence?session_id={sid}")
+        assert seq_resp.status_code == 200
+        assert seq_resp.json() == "cccccccccc"
+
+        # 3. Reset the session with a new sequence.
+        reset_payload = {
+            "name": "reset_test",
+            "sequence": "aaaaaaaaaa",
+            "mutations": [""],
+            "session_id": sid,
+        }
+        reset_resp = await async_client.post(self.ENDPOINT, json=reset_payload)
+        assert reset_resp.status_code == 200
+        reset_data = reset_resp.json()
+        assert reset_data["session_id"] == sid
+
+        # 4. Verify the base_sequence has changed.
+        seq_resp = await async_client.get(f"/get/sequence?session_id={sid}")
+        assert seq_resp.status_code == 200
+        assert seq_resp.json() == "aaaaaaaaaa"
+
+        # 5. Verify altered_sequences was cleared (allsimpleprobas should be empty).
+        probas_resp = await async_client.get(f"/get/allsimpleprobas?session_id={sid}")
+        assert probas_resp.status_code == 200
+        assert probas_resp.json() == {}
+
+    @pytest.mark.asyncio
+    async def test_reset_existing_session_empty_sequence(self, async_client):
+        """Existing session_id + empty sequence → unchanged reconnect behaviour
+        (regression guard)."""
+        # 1. Create a session (via /resetgv).
+        create_payload = {
+            "name": "regression_test",
+            "sequence": "tttttttttt",
+            "mutations": [""],
+            "session_id": None,
+        }
+        create_resp = await async_client.post(self.ENDPOINT, json=create_payload)
+        assert create_resp.status_code == 200
+        sid = create_resp.json()["session_id"]
+
+        # 2. Reset with empty sequence — should keep the original base_sequence.
+        reset_payload = {
+            "name": "regression_test",
+            "sequence": "",
+            "mutations": [""],
+            "session_id": sid,
+        }
+        reset_resp = await async_client.post(self.ENDPOINT, json=reset_payload)
+        assert reset_resp.status_code == 200
+        assert reset_resp.json()["session_id"] == sid
+
+        # 3. Verify base_sequence is unchanged.
+        seq_resp = await async_client.get(f"/get/sequence?session_id={sid}")
+        assert seq_resp.status_code == 200
+        assert seq_resp.json() == "tttttttttt"
+
+    @pytest.mark.asyncio
+    async def test_reset_null_session_mints_new(self, async_client):
+        """session_id: null → unchanged mint-new-session behaviour (regression guard)."""
+        payload = {
+            "name": "mint_test",
+            "sequence": "gggggggggg",
+            "mutations": [""],
+            "session_id": None,
+        }
+        resp = await async_client.post(self.ENDPOINT, json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["session_id"] is not None
+        assert data["status"] == "reset"
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { html } from "../../lib/preact.js";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
-import { flattenProbaTrack, flattenDeltaTrack } from "../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack, parseTrackedLabel } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
 // type is `dict[set[mut], float]` but the actual runtime keys are Python
@@ -13,12 +13,29 @@ function parseZoneKey(key) {
   return matches.length ? matches.join(", ") : key;
 }
 
-function SequenceOutput({ sequence }) {
+// Build a Map from 0-based position index → operation summary string from
+// the tracked-alteration data returned by GET /get/allsimpleprobas.
+// Each entry's label (e.g. "1: insert:aaaa@12") is parsed to extract the
+// position range and operation summary.
+function buildOperationsMap(probaHistoryData) {
+  if (!probaHistoryData) return null;
+  const ops = new Map();
+  for (const [label] of Object.entries(probaHistoryData)) {
+    const parsed = parseTrackedLabel(label);
+    if (!parsed) continue;
+    for (let i = parsed.from; i <= parsed.to; i++) {
+      ops.set(i, parsed.summary);
+    }
+  }
+  return ops.size > 0 ? ops : null;
+}
+
+function SequenceOutput({ sequence, operations }) {
   const ws = useWorkspace();
   return html`
     <div>
       <p class="output-panel__hint">Resulting sequence after this recipe step (diff vs. the original base sequence):</p>
-      <${SequenceTrack} sequence=${sequence} reference=${ws.baseSequence} />
+      <${SequenceTrack} sequence=${sequence} reference=${ws.baseSequence} operations=${operations} />
     </div>
   `;
 }
@@ -118,10 +135,10 @@ export function OutputPanel({ result }) {
   if (!result) {
     return html`<p class="output-panel__hint">Run the recipe to see output here.</p>`;
   }
-  const { kind, data } = result;
+  const { kind, data, operations } = result;
   return html`
     <div class="output-panel">
-      ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} />` : null}
+      ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} operations=${operations} />` : null}
       ${kind === "proba" ? html`<${ProbaOutput} data=${data} />` : null}
       ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} />` : null}
       ${kind === "delta" ? html`<${DeltaOutput} data=${data} />` : null}

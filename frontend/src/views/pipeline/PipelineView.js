@@ -2,6 +2,8 @@ import { html, useState } from "../../lib/preact.js";
 import { SessionBar } from "../../components/shared/SessionBar.js";
 import { Spinner } from "../../components/shared/Feedback.js";
 import { useWorkspace } from "../../lib/workspace.js";
+import { api } from "../../api/client.js";
+import { parseTrackedLabel } from "../../lib/sequence.js";
 import { BlockLibrary } from "./BlockLibrary.js";
 import { RecipeBlock } from "./RecipeBlock.js";
 import { OutputPanel } from "./OutputPanel.js";
@@ -121,11 +123,28 @@ export function PipelineView() {
     setOverIndex(null);
   }
 
+  const ALTERATION_CATEGORIES = new Set(["Index-based", "Pattern-based", "Random"]);
+
   async function bake() {
     if (!ws.sessionId) return;
     setRunning(true);
     setFinalResult(null);
     setRecipe((r) => r.map((b) => ({ ...b, status: "idle", error: null, resultSummary: null })));
+
+    // If any enabled block is an alteration-category block, reset the session
+    // so every Bake starts from a clean altered sequence (no accumulated
+    // tracked entries from previous Bakes) — see Task 7.
+    const hasAlteration = recipe.some(
+      (b) => b.enabled && ALTERATION_CATEGORIES.has(blockById(b.defId).category)
+    );
+    if (hasAlteration) {
+      try {
+        await workspace.resetSession();
+      } catch {
+        // If reset fails, continue anyway — the bake will run on whatever
+        // state the session is in, and the error is surfaced via ws.lastError.
+      }
+    }
 
     let lastOutput = null;
     let stopped = false;
@@ -149,7 +168,30 @@ export function PipelineView() {
         stopped = true;
       }
     }
-    setFinalResult(lastOutput);
+
+    // If the bake produced a sequence output, fetch the tracked-alteration
+    // history to build the operations map for hover labels (Task 8).
+    let operations = null;
+    if (hasAlteration && lastOutput?.kind === "sequence") {
+      try {
+        const probaData = await api.get.allSimpleProbas(ws.sessionId);
+        if (probaData) {
+          operations = new Map();
+          for (const [label] of Object.entries(probaData)) {
+            const parsed = parseTrackedLabel(label);
+            if (!parsed) continue;
+            for (let i = parsed.from; i <= parsed.to; i++) {
+              operations.set(i, parsed.summary);
+            }
+          }
+          if (operations.size === 0) operations = null;
+        }
+      } catch {
+        // Non-fatal: sequence output still renders without operation labels.
+      }
+    }
+
+    setFinalResult(lastOutput ? { ...lastOutput, operations } : null);
     setRunning(false);
   }
 

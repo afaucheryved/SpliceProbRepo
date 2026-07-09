@@ -60,3 +60,49 @@ The new tests in `test_mixins.py` covering the reconstruction cases (`test_bound
 - **Task 3 — `[DONE]`**: reviewed `client.js`, `workspace.js`, all three proposals' new UI paths (Pipeline `tracked_alterations_simple` block, Workbench `TrackedProbabilities`, Compare `loadTrackedAlterations` + mode-aware `RankingTable`/`ManhattanChart`/`DetailChart`/`ExportBar`, `SegmentedControl`'s new `ariaLabel` prop). No stale `deltaData` references left after the `deltaData`→`resultData` rename (checked via repo-wide grep). Does not consume the buggy `"altered sequence"` field, so unaffected by Task 2's bug.
 - **Task 4 — `[DONE]`**: reviewed `PipelineView.js`/`RecipeBlock.js`/`BlockForm.js`/`pipeline.css`. Drop-zone container fallback correctly guarded (`e.target === e.currentTarget`) against double-handling drops that bubble from child rows/tail strip. Width-reduction scoped via a new `field__control` class (doesn't clobber the matrix/mutation-list fields' dedicated widths). Layout restructure correctly nests `SessionBar` + Output panel in a shared flex column so the session bar now matches the output column's width; session ID badge / "Start new session" button relocated, not removed. Collapse state is local per-`RecipeBlock` (correct choice — pure UI state, no reason to live in the `recipe` array).
 - **Sandbox caveat (applies to Task 3 and Task 4):** this environment has no `node`, browser, or browser-automation tool, and the project has no frontend build/test step to run instead. Verification for both tasks was static (brace/paren balance, served-file-byte-diff, manual trace of Preact/`htm` semantics against the actual backend response shapes) rather than a real DOM/interaction check. Recommend a human open all three proposals once before the next release to confirm layout, collapse toggle, drag-and-drop, and the new Compare data-source toggle behave as intended.
+
+## Judge Review — Tasks 5–8 (2026-07-09)
+
+### Process note (not a code bug, flagging so it isn't repeated)
+
+The `[WORKER]` session that implemented Tasks 5–8 marked all four `[x]` directly in `docs/ai/progress.md` and under "Completed Tasks" in `docs/ai/active_context.md`. Per `.clinerules` §3, a Worker may append an implementation note but must never change a task's checkbox state — that is the Judge's exclusive authority. This review corrects the checkboxes to reflect independent verification below; it does not, by itself, affect the verdict on the underlying work.
+
+### Task 5 — `[DONE]`, independently verified
+
+`reset_session_state()` (`app/domain/internal_gv_factory.py`) correctly overwrites `base_sequence` (via a new `overwrite` flag on `_store_base_sequence`, rather than changing that function's existing write-once default — the right call, since other callers rely on the default), resets `current_altered_sequence`, and clears `altered_sequences`, all under the same `session_id`. `POST /resetgv` gates this on `session_id is not None and p.sequence.strip()`, preserving the old reconnect-without-change behavior for the empty-sequence case and the old mint-new-session behavior for `session_id: null`.
+
+Independently re-ran a live `TestClient` reproduction beyond the Worker's own 3 new tests: built a session, tracked an alteration, reset in-place with a new sequence — confirmed `session_id` unchanged, `base_sequence` updated, tracked history cleared (`GET /get/allsimpleprobas` → `{}`), and confirmed the empty-sequence reconnect path leaves `base_sequence` untouched (regression guard). All 4 `TestResetGV` tests pass directly (not taken from the Worker's report).
+
+### Task 6 — `[FAILED]`
+
+**Bug:** the disabled "Load sequence" button's tooltip reads *"Load a sequence first to enable this action"* (`SessionBar.js`) — shown on the "Load sequence" button itself, when there is no active session. This is circular: it tells the user to do the very thing the disabled button represents. The entire point of this task was removing ambiguity/confusion between these two buttons ("Address the ambiguity of the 'start new session' button") — shipping self-contradictory copy on the fix for that ambiguity defeats the task's purpose.
+
+**Fix:** change the disabled-state tooltip to something that refers to the *other* button, e.g. `"No active session yet — click 'Start new session' first."` One-line fix in `frontend/src/components/shared/SessionBar.js` (the `title=` ternary on the "Load sequence" button).
+
+Everything else in Task 6 is correct: `workspace.loadSequenceIntoSession()` correctly calls the Task 5 in-place-reset path with the existing `session_id`; "Start new session" correctly still calls unmodified `workspace.initSession()`; the two-button layout uses the existing `flex-wrap` so it doesn't break Pipeline's narrow `compact` column.
+
+### Task 7 — `[DONE]`, independently verified
+
+`workspace.resetSession()` calls the Task 5 in-place-reset path with the *unchanged* base sequence; `PipelineView.js`'s `bake()` calls it before running the recipe whenever at least one enabled block is in `ALTERATION_CATEGORIES` (`Index-based`/`Pattern-based`/`Random`), correctly skipping the reset for scoring/analysis-only bakes (nothing to clear).
+
+Independently reproduced the **exact scenario from the original bug report** — Move block → Tracked Alterations block, simulated 4 consecutive "Bake" clicks via direct API calls mirroring `bake()`'s logic exactly — confirmed exactly 1 tracked entry in `GET /get/allsimpleprobas` after every single click, not an accumulating count. Full suite `pytest app/test/` — diffed the failing-test list against a `git stash` baseline: identical pre-existing failure set plus the 3 new Task 5 tests now passing (41 passed / 43 failed vs. baseline 38/43) — no regressions.
+
+### Task 8 — `[FAILED]`
+
+**Confirmed bug 1 — `move`/`copy_paste` highlight the wrong position (stale source range, not the destination):** `parseTrackedLabel()` (`frontend/src/lib/sequence.js`) parses `"move:{start_cc}-{end_cc}->@{index_paste}"` and returns `{ from: start_cc-1, to: end_cc-1 }` — the **pre-move source range**. But after a move, that range no longer contains the moved content; it holds whatever followed the cut region, now shifted into place. Verified live: base `"AAAACCCCGGGGTTTT"`, `move(start_cc=1, end_cc=4, index_paste=12)` → real output `"CCCCGGGAAAAT"` with the moved `"AAAA"` now at 0-based `[7,10]`; the tracked label is `"move:1-4->@8"` (backend stores the already-cut-adjusted paste index). `parseTrackedLabel` returns `{from:0, to:3}` — 0-based positions 0-3 are `"CCCC"`, completely unrelated to the moved content. A user hovering the Pipeline sequence output after a Move block sees the operation label attached to the wrong bases entirely. `copy_paste` has the identical bug shape (uses the copy *source* range instead of the paste *destination*) — not empirically re-run, but the code is structurally identical, so treat it as equally broken.
+
+  **Fix:** the label already contains everything needed — pattern length is computable from the label itself as `end_cc - start_cc + 1` (`m[2]-m[1]+1`), and the destination start is `index_paste - 1` (`m[3]-1`, already present in the regex capture but currently unused in the returned range). Return `{ from: idx0, to: idx0 + patternLen - 1 }` instead of the raw `m[1]`/`m[2]` source range, for both `move` and `copy_paste`.
+
+**Confirmed bug 2 — `replace`/`delete_by_pattern`/`mutate_independently` hardcode `{ from: 0, to: 0 }`:** every operation of these three types gets attributed to position 1 (0-based index 0) regardless of where the actual pattern match (or, for random mutation, the actual changed bases) occurred — because the current `mutation.human` label format for these three operation types (`"replace:{old}->{new}"`, `"delete_by_pattern:{pattern}"`, `"mutate_independently"`) doesn't encode a position at all, and the parser fabricates one instead of admitting it can't. With more than one such entry, they overwrite each other at position 0 (`Map.set(0, ...)` — last-processed wins), while the bases actually changed by those operations get no hover label at all.
+
+  **Fix:** return `null` for these three cases instead of a fabricated `{from:0, to:0}` — `buildOperationsMap()`/inline equivalent already treats `null` as "not parseable, skip." Silently omitting an operation label is far less misleading than confidently attaching it to the wrong base. (Properly attributing these three operation types would require the backend to start encoding match/mutated positions in the label or entry — out of scope for this fix; Task 17's planned per-match tracking for `replace`/`delete_by_pattern` will naturally supply real per-match position ranges for two of the three once it lands.)
+
+**Minor (cleanup, not a correctness bug):** `OutputPanel.js` defines `buildOperationsMap()` but never calls it anywhere in the file — dead code duplicating the (correct, actually-used) inline logic in `PipelineView.js`'s `bake()`. Remove it or replace the inline logic with a call to it; either is fine, just pick one.
+
+**Files to fix:** `frontend/src/lib/sequence.js` (`parseTrackedLabel()` — both bugs), `frontend/src/views/pipeline/OutputPanel.js` (dead-code cleanup, optional).
+
+### Verdict
+- **Task 5 — `[DONE]`**
+- **Task 6 — `[FAILED]`** — one-line tooltip-text fix, routed back to `[WORKER]`.
+- **Task 7 — `[DONE]`**
+- **Task 8 — `[FAILED]`** — `parseTrackedLabel()` fixes for `move`/`copy_paste` (wrong position) and `replace`/`delete_by_pattern`/`mutate_independently` (fabricated position), routed back to `[WORKER]`.

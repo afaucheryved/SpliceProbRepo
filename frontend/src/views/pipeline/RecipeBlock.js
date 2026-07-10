@@ -1,5 +1,6 @@
 import { html, useState } from "../../lib/preact.js";
 import { BlockForm } from "./BlockForm.js";
+import { categorySlug } from "./blockDefinitions.js";
 
 const STATUS_ICON = {
   idle: "○",
@@ -13,6 +14,12 @@ const STATUS_ICON = {
 // drag-and-drop (no extra dependency) driven by the parent PipelineView.
 export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onDropOnMutationList, dragHandlers }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  // Only the "Tracked Alterations" block (probaHistory output) has a
+  // per-entry breakdown worth expanding (Task 14) — its resultData is the
+  // same label -> entry map GET /get/allsimpleprobas returns.
+  const isExpandableSummary = def.outputKind === "probaHistory" && block.resultData && typeof block.resultData === "object";
+  const trackedLabels = isExpandableSummary ? Object.keys(block.resultData) : [];
   return html`
     <div
       class="recipe-block ${block.enabled ? "" : "recipe-block--disabled"} ${dragHandlers.isOver ? "recipe-block--drop-target" : ""}"
@@ -34,7 +41,7 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
         </button>
         <span class="recipe-block__status recipe-block__status--${block.status}">${STATUS_ICON[block.status]}</span>
         <span class="recipe-block__title">${def.label}</span>
-        <span class="recipe-block__category">${def.category}</span>
+        <span class="recipe-block__category ${categorySlug(def.category) ? `recipe-block__category--${categorySlug(def.category)}` : ""}">${def.category}</span>
         <label class="recipe-block__toggle">
           <input type="checkbox" checked=${block.enabled} onChange=${() => onToggle(block.uid)} />
         </label>
@@ -45,7 +52,27 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
             <p class="recipe-block__summary">${def.summary}</p>
             <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} blockUid=${block.uid} onDropOnMutationList=${onDropOnMutationList} />
             ${block.error ? html`<p class="recipe-block__error">⚠ ${block.error}</p>` : null}
-            ${block.resultSummary ? html`<p class="recipe-block__result">${block.resultSummary}</p>` : null}
+            ${block.resultSummary
+              ? isExpandableSummary
+                ? html`
+                    <button
+                      type="button"
+                      class="recipe-block__result recipe-block__result--expandable"
+                      onClick=${() => setSummaryExpanded((v) => !v)}
+                      title="Click to ${summaryExpanded ? "hide" : "show"} each tracked alteration"
+                    >
+                      ${summaryExpanded ? "▾" : "▸"} ${block.resultSummary}
+                    </button>
+                    ${summaryExpanded
+                      ? html`
+                          <ul class="recipe-block__tracked-list">
+                            ${trackedLabels.map((label) => html`<li key=${label} class="mono">${label}</li>`)}
+                          </ul>
+                        `
+                      : null}
+                  `
+                : html`<p class="recipe-block__result">${block.resultSummary}</p>`
+              : null}
           `
         : null}
     </div>

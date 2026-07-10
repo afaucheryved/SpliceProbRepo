@@ -6,6 +6,18 @@ import { api, MUTATION_MATRIX_BASES } from "../../api/client.js";
 import { workspace } from "../../lib/workspace.js";
 import { buildMutation } from "../../lib/sequence.js";
 
+// Category -> CSS modifier slug, for the two categories that score/analyze
+// rather than modify the sequence (Task 15). Index-based/Pattern-based/Random
+// keep the default neutral styling (no slug).
+const CATEGORY_SLUG = {
+  Scoring: "scoring",
+  Analysis: "analysis",
+};
+
+export function categorySlug(category) {
+  return CATEGORY_SLUG[category] || "";
+}
+
 function identityMatrix() {
   return MUTATION_MATRIX_BASES.map((_, r) => MUTATION_MATRIX_BASES.map((_, c) => (r === c ? 1 : 0)));
 }

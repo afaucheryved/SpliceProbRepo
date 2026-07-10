@@ -13,6 +13,8 @@
   --app-panel-alt: #1c212c;
   --danger: #ef4444;
   --success: #22c55e;
+  --category-scoring: #eab308;
+  --category-analysis: #06b6d4;
 
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -238,6 +240,20 @@ label {
   min-width: 180px;
 }
 
+.session-bar__file-input {
+  display: none;
+}
+
+/* ---- Tracked Alteration delta-bar output (Task 20) ---- */
+
+.output-panel__history-label--zone {
+  color: #bbf7d0;
+}
+
+.output-panel__history-label--match {
+  color: #fecaca;
+}
+
 /* ---- Feedback ---- */
 
 .error-banner {
@@ -443,6 +459,35 @@ table.data-table {
 
 .scroll-y {
   overflow-y: auto;
+}
+
+/* ---- Chart zoom toolbar (Task 13) ---- */
+
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chart-toolbar__btn {
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  color: var(--app-fg);
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.15rem 0.5rem;
+}
+
+.chart-toolbar__btn:hover {
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+
+.chart-toolbar__slider {
+  flex: 1;
+  max-width: 160px;
 }
 
 /* ---- Popover ---- */

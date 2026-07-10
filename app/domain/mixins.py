@@ -33,6 +33,7 @@ from typing import Any, List, Dict
 #local import
 from app.services.redis_session import get_session_data, set_session_data
 from app.domain.spliceai_calculation import tuple_mutation
+from app.services.general_services import compute_delta_result
 
 
 class AlteredSequenceTrackerMixin:
@@ -55,7 +56,12 @@ class AlteredSequenceTrackerMixin:
             set_session_data(self.session_id, "base_sequence", base_seq)
         return self.session_id
 
-    def _track_alteration(self, human_label: str) -> None:
+    def _track_alteration(
+        self,
+        human_label: str,
+        match_start: int | None = None,
+        match_end: int | None = None,
+    ) -> None:
         """Persist information about the latest alteration.
 
         The entry stored in Redis contains:
@@ -66,6 +72,10 @@ class AlteredSequenceTrackerMixin:
         - ``mutation.splicing``: a list of SpliceAI mutation labels in
           ``>p.<pos>.<ref>><alt>`` format (only for same-length edits; empty
           for structural edits that change sequence length).
+        - ``match_start``/``match_end`` (optional, 0-based, inclusive): only
+          set for per-match pattern-based variant entries (Task 17), so
+          consumers (Task 18's chart shading) don't need to re-parse the
+          match position out of the label.
 
         One-hot arrays are **not** persisted. They exist only transiently,
         in memory, for the duration of a single model call.
@@ -73,6 +83,10 @@ class AlteredSequenceTrackerMixin:
         Args:
             human_label: Human‑readable description of the mutation (e.g.
                 ``"insert:ATCG@12"``).
+            match_start: 0-based inclusive start of a specific pattern match,
+                for per-match variant entries only (Task 17).
+            match_end: 0-based inclusive end of a specific pattern match,
+                for per-match variant entries only (Task 17).
         """
         session_id = self._ensure_session()
 
@@ -100,6 +114,21 @@ class AlteredSequenceTrackerMixin:
         else:
             splicing_labels = []
 
+        # Per-position delta (altered - base) for acceptor/donor, for Task 20's
+        # delta-bar Tracked Alteration charts. Only well-defined when the
+        # altered sequence is the same length as the base (a position-wise
+        # diff has no sound meaning across a length-changing structural
+        # edit) -- entries that don't qualify simply omit "delta_proba" and
+        # the frontend falls back to the absolute-probability chart for them.
+        delta_proba = None
+        self_sequence = getattr(self, "sequence", "")
+        if len(self_sequence) == len(altered_seq) and altered_seq:
+            try:
+                base_proba = self.result_per_sequences(using_altered_sequence=False)
+                delta_proba = compute_delta_result(self_sequence, altered_seq, base_proba, proba)
+            except Exception:
+                delta_proba = None
+
         # Retrieve the existing list of tracked alterations.
         altered_list: List[Dict[str, Any]] = (
             get_session_data(session_id, "altered_sequences") or []
@@ -120,11 +149,34 @@ class AlteredSequenceTrackerMixin:
             # class of "lossy label" bugs.
             "altered_sequence": altered_seq,
         }
+        if delta_proba is not None:
+            entry["delta_proba"] = delta_proba
+        if match_start is not None:
+            entry["match_start"] = match_start
+        if match_end is not None:
+            entry["match_end"] = match_end
         altered_list.append(entry)
         set_session_data(session_id, "altered_sequences", altered_list)
         # Store the latest altered sequence for easy retrieval on the next
         # request.
         set_session_data(session_id, "current_altered_sequence", altered_seq)
+
+    def _resync_current_altered_sequence(self) -> None:
+        """Re-persist ``current_altered_sequence`` in Redis from ``self.altered_sequence``.
+
+        ``_track_alteration`` unconditionally persists whatever
+        ``self.altered_sequence`` is *at the moment it's called* — every
+        future request reconstructs its ``InternalGeneticVariant`` from this
+        Redis value (see ``create_internal_variant``). Task 17's per-match
+        pattern variants call ``_track_alteration`` with ``self.altered_sequence``
+        temporarily swapped to each one-off variant; whichever variant call
+        happens to run last would otherwise leave Redis pointing at that
+        variant instead of the real chain-forward result. Call this once
+        after such a temporary-swap sequence finishes to restore it.
+        """
+        session_id = getattr(self, "session_id", None)
+        if session_id:
+            set_session_data(session_id, "current_altered_sequence", self.altered_sequence)
 
 
 def _apply_single_alteration(current: str, entry: Dict[str, Any], session_id: str) -> str:

@@ -1,5 +1,5 @@
 import { html } from "../../lib/preact.js";
-import { BLOCK_DEFINITIONS } from "./blockDefinitions.js";
+import { BLOCK_DEFINITIONS, categorySlug } from "./blockDefinitions.js";
 
 const CATEGORIES = [...new Set(BLOCK_DEFINITIONS.map((b) => b.category))];
 
@@ -17,7 +17,7 @@ export function BlockLibrary({ onAdd }) {
               (def) => html`
                 <div
                   key=${def.id}
-                  class="block-library__item"
+                  class="block-library__item ${categorySlug(def.category) ? `block-library__item--${categorySlug(def.category)}` : ""}"
                   draggable="true"
                   title=${def.summary}
                   onDragStart=${(e) => e.dataTransfer.setData("application/x-block-id", def.id)}

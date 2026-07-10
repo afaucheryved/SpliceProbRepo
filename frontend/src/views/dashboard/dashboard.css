@@ -127,3 +127,21 @@
   color: #6b7280;
   font-size: 0.68rem;
 }
+
+.history-log__label--zone {
+  color: #bbf7d0;
+}
+
+.history-log__label--match {
+  color: #fecaca;
+}
+
+.history-log__value--up {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.history-log__value--down {
+  color: #ef4444;
+  font-weight: 700;
+}

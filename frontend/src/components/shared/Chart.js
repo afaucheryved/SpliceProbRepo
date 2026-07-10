@@ -1,6 +1,10 @@
 import { h, useEffect, useRef, useState } from "../../lib/preact.js";
 import ChartJS from "https://esm.sh/chart.js@4.4.4/auto";
+import zoomPlugin from "https://esm.sh/chartjs-plugin-zoom@2?deps=chart.js@4.4.4";
 import { Popover } from "./Popover.js";
+
+// Registered once, shared by every Chart instance (Task 13).
+ChartJS.register(zoomPlugin);
 
 // Thin Chart.js wrapper shared by every probability/delta/scatter view.
 //
@@ -10,9 +14,13 @@ import { Popover } from "./Popover.js";
 //   - Position (1-based)
 //   - Score for each dataset at that point
 //   - ±10 bases of sequence context around the clicked position
+//
+// Every chart gets x-axis zoom/pan (Task 13): scroll-wheel / pinch zoom,
+// drag-to-select-region zoom, a +/- /home toolbar, and a pan slider.
 export function Chart({ type = "line", labels = [], datasets = [], height = 260, options = {}, sequence }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
+  const panSliderRef = useRef(null);
   const [popover, setPopover] = useState(null);
 
   useEffect(() => {
@@ -22,6 +30,21 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
     const userOnClick = options.onClick;
     const mergedOptions = {
       ...options,
+      plugins: {
+        ...options.plugins,
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            // Drag-to-select a region to zoom into (the "magnifying glass"
+            // mechanism) -- same underlying zoom/pan state as the toolbar
+            // buttons and slider below, not a separate zoom system.
+            drag: { enabled: true },
+            mode: "x",
+          },
+        },
+      },
       onClick: (evt, elements, chart) => {
         // Call user's own onClick first (e.g. ManhattanChart's row focus).
         if (userOnClick) userOnClick(evt, elements, chart);
@@ -84,16 +107,49 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
     chart.update();
   }, [labels, datasets]);
 
-  return h("div", { style: `height:${height}px; position:relative;` },
-    h("canvas", { ref: canvasRef }),
-    popover ? h(Popover, {
-      key: `${popover.position}-${popover.x}-${popover.y}`,
-      x: popover.x,
-      y: popover.y,
-      position: popover.position,
-      scores: popover.scores,
-      sequence: popover.sequence,
-      onClose: () => setPopover(null),
-    }) : null
+  // Zoom toolbar handlers (Task 13) -- all operate on the same underlying
+  // chartjs-plugin-zoom state as the wheel/pinch/drag-select above.
+  const zoomIn = () => chartRef.current?.zoom(1.2);
+  const zoomOut = () => chartRef.current?.zoom(0.8);
+  const resetZoom = () => chartRef.current?.resetZoom();
+  // The slider is a relative scrubber, not an absolute position: each
+  // interaction pans by the distance moved from center, then re-centers
+  // itself, so it can keep panning in either direction indefinitely without
+  // needing to track the chart's total zoomed extent.
+  const handlePanSlider = (e) => {
+    const value = Number(e.currentTarget.value);
+    const delta = value - 50;
+    if (delta !== 0) chartRef.current?.pan({ x: -delta * 4 });
+    e.currentTarget.value = "50";
+  };
+
+  return h("div", { style: "display:flex; flex-direction:column; gap:0.25rem;" },
+    h("div", { class: "chart-toolbar" },
+      h("button", { type: "button", class: "chart-toolbar__btn", title: "Zoom out", onClick: zoomOut }, "−"),
+      h("input", {
+        ref: panSliderRef,
+        type: "range",
+        min: "0",
+        max: "100",
+        defaultValue: "50",
+        class: "chart-toolbar__slider",
+        title: "Drag to pan left/right",
+        onInput: handlePanSlider,
+      }),
+      h("button", { type: "button", class: "chart-toolbar__btn", title: "Zoom in", onClick: zoomIn }, "+"),
+      h("button", { type: "button", class: "chart-toolbar__btn", title: "Reset zoom", onClick: resetZoom }, "⌂")
+    ),
+    h("div", { style: `height:${height}px; position:relative;` },
+      h("canvas", { ref: canvasRef }),
+      popover ? h(Popover, {
+        key: `${popover.position}-${popover.x}-${popover.y}`,
+        x: popover.x,
+        y: popover.y,
+        position: popover.position,
+        scores: popover.scores,
+        sequence: popover.sequence,
+        onClose: () => setPopover(null),
+      }) : null
+    )
   );
 }

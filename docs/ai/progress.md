@@ -36,6 +36,8 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Judge verdict (2026-07-09): `[DONE]`.** Independently reproduced the exact scenario from the original bug report (Move block → Tracked Alterations block, 4 consecutive Bake clicks) — confirmed exactly 1 tracked entry after every click, not accumulating. Full suite shows no regressions (diffed against `git stash` baseline). See `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8".
 
+  **Correction (2026-07-10) — the above verification had a blind spot; the fix was NOT actually live.** `PipelineView.js` called `workspace.resetSession()` (a *named export* of `workspace.js`) but only ever imported `useWorkspace` — `workspace` itself was never imported. This threw a `ReferenceError` on every Bake, silently swallowed by the surrounding empty `catch {}` block (added to tolerate an unreachable session), so the reset never actually ran in the real app. The 2026-07-09 verification above reproduced the bug via direct API calls mirroring `bake()`'s *intended* logic, not by exercising the real frontend file — a gap inherent to this sandbox's lack of a browser/Node runtime, worth remembering for future sessions: a curl-level repro of "what the code is supposed to do" cannot catch a JS `ReferenceError` in code that was never actually executed. **Fixed** by importing `workspace` alongside `useWorkspace`. Re-verified live (see Task 7 in `docs/ai/audits_history.md` → "Judge Review — Tasks 12–20 batch" for the repro): 4 simulated Bake clicks now correctly produce exactly 1 tracked entry each time.
+
   **Files touched:** `frontend/src/views/pipeline/PipelineView.js`, `frontend/src/lib/workspace.js`.
 
 ### Frontend
@@ -91,13 +93,17 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Judge verdict (2026-07-10): `[DONE]`.** Re-confirmed the static analysis against the current tree — still holds, no code change needed.
 
-- [ ] **Task 12 — Blue-violet gap-indicator bar when dragging a block between two others**
+- [x] **Task 12 — Blue-violet gap-indicator bar when dragging a block between two others**
 
   Reordering itself already works (`reorder()` in `PipelineView.js`, wired via native HTML5 drag-and-drop in `RecipeBlock.js`) — this is purely a visual-affordance gap. Currently a drag-over target gets a whole-block outline (`.recipe-block--drop-target`'s box-shadow, using `--app-accent: #6366f1` — this is "the blue-violet CSS color already present in the frontend" the request refers to). Add a thin bar rendered in the gap between two blocks during drag-over, using the same `--app-accent` color, as a more precise "insert here" indicator — replacing or supplementing the current whole-block highlight.
 
-  **Files:** `frontend/src/views/pipeline/RecipeBlock.js`, `PipelineView.js`, `pipeline.css`.
+  **Implemented 2026-07-10:** the existing `overIndex` state already means "insert before this index" (per `reorder()`'s splice math), so no drag-logic changes were needed — `PipelineView.js`'s recipe map now interleaves a `.recipe-gap` div before each block (`recipe.flatMap` instead of `recipe.map`), lighting up (`--app-accent`, 4px bar) when `overIndex === index`. Supplements the existing whole-block highlight rather than replacing it.
 
-- [ ] **Task 13 — Chart zoom: +/- buttons + slider, and magnifying-glass drag-select + home reset**
+  **Judge verdict (2026-07-10): `[DONE]`.** Reviewed the flatMap restructure — each gap/block pair keyed uniquely (`gap-${uid}`/`uid`), no key collisions; the mechanism reuses existing state with no new drag handlers, so no new failure surface. Sandbox caveat (no browser) applies — visually unverified.
+
+  **Files:** `frontend/src/views/pipeline/PipelineView.js`, `pipeline.css`.
+
+- [x] **Task 13 — Chart zoom: +/- buttons + slider, and magnifying-glass drag-select + home reset**
 
   **Scope:** every chart rendered by a Scoring-category block's output — Pipeline's `ProbaOutput`/`ProbaHistoryOutput`/`DeltaOutput` (`OutputPanel.js`), Compare's `DetailChart`/`ManhattanChart`, Workbench's equivalent chart usage. Enumerate exact call sites during implementation (`DeltaSummary.js` currently renders stat tiles only, no chart — confirm whether it's in scope).
 
@@ -107,27 +113,45 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Coordinate with Task 10 and Task 18** — the zoom plugin's own drag/click handling could conflict with Task 10's click-to-popup handler; whichever of these three lands last must verify no regression against the earlier two.
 
-- [ ] **Task 14 — "Tracked Alterations" block: expandable per-entry summary**
+  **Implemented 2026-07-10 (landed last of the Chart.js-touching trio):** added `chartjs-plugin-zoom@2` (pinned to `chart.js@4.4.4` via esm.sh's `?deps=` param to avoid a duplicate Chart.js copy), registered once at module scope in `Chart.js`. Registered `plugins.zoom` with wheel/pinch/drag-select zoom and x-axis pan, merged into `mergedOptions.plugins` (preserves any caller-supplied `plugins`, e.g. `ManhattanChart`'s `legend: {display:false}`). Added a toolbar (`-`/slider/`+`/⌂ home) above every chart, calling `chart.zoom()`/`chart.pan()`/`chart.resetZoom()` directly on the existing `chartRef`. The pan slider is a relative scrubber (re-centers to 50 after each input) rather than an absolute position, since Chart.js doesn't expose "current pan position" as a simple 0-100 value. Since this is added centrally in the shared `Chart` component, every consumer (including `ManhattanChart`/`DetailChart`/`GenomeTrack`) gets it automatically — matches "every chart" scope without touching each call site.
+
+  **Judge verdict (2026-07-10): `[DONE]`.** Verified the `chartjs-plugin-zoom@2` esm.sh URL resolves (HTTP 200, real ESM module, correct default export) — confirmed via live `curl` in this sandbox. Reviewed the plugins-merge to confirm `ManhattanChart`'s existing `legend` option survives. Static analysis only for the actual zoom/pan/drag-select *interaction* — no browser available in this sandbox to click-test it; flagging for a human check same as Tasks 9/10.
+
+  **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/styles/base.css`.
+
+- [x] **Task 14 — "Tracked Alterations" block: expandable per-entry summary**
 
   **Precise target:** the `tracked_alterations_simple` block's result-summary line rendered under its form in `RecipeBlock.js` (e.g. "→ 2 tracked alteration(s)", produced by `PipelineView.js`'s `summarize()`) — not the Output panel (which already shows one chart per entry). Make this line clickable/expandable to list each tracked entry's label — the same `"{step index}: {mutation.human}"` strings already used as chart labels in `ProbaHistoryOutput`.
 
   **Requires:** `PipelineView.js`'s `recipe` state currently stores only `resultSummary` (a string) per block; add the raw result data too (at least for this block type) so it can be expanded without re-fetching.
 
-  **Files:** `frontend/src/views/pipeline/PipelineView.js`, `RecipeBlock.js`, `pipeline.css`.
+  **Implemented 2026-07-10:** `bake()` already stores `resultData` on every block (added by Task 9's diff-capture work) — no `PipelineView.js` change was actually needed. `RecipeBlock.js` now renders the `tracked_alterations_simple` block's (`outputKind === "probaHistory"`) result summary as a clickable toggle button; expanding lists `Object.keys(block.resultData)` (the same labels `ProbaHistoryOutput` uses).
 
-- [ ] **Task 15 — Distinct colors for "Scoring" and "Analysis" block categories**
+  **Judge verdict (2026-07-10): `[DONE]`.** Confirmed `resultData` is populated for every non-sequence block type (Task 9's `bake()` branch), so no re-fetch is needed on expand. Sandbox caveat applies.
+
+  **Files:** `frontend/src/views/pipeline/RecipeBlock.js`, `pipeline.css`.
+
+- [x] **Task 15 — Distinct colors for "Scoring" and "Analysis" block categories**
 
   `blockDefinitions.js` already tags every block with a `category` (`Index-based`, `Pattern-based`, `Random`, `Scoring`, `Analysis`); `.recipe-block__category` (`pipeline.css`) renders all of them identically today (neutral gray). Add distinct accent colors specifically for `Scoring` and `Analysis` — the two categories that score/analyze rather than modify the sequence — via a category→CSS-class mapping. Optionally apply the same mapping to `.block-library__item` in the Library panel for consistency.
 
-  **Files:** `frontend/src/views/pipeline/RecipeBlock.js` or `BlockLibrary.js`, `pipeline.css`.
+  **Implemented 2026-07-10:** added `categorySlug()` to `blockDefinitions.js` (maps `Scoring`/`Analysis` to a slug, others to `""`), two new CSS vars (`--category-scoring: #eab308`, `--category-analysis: #06b6d4`) in `base.css`, and modifier classes in `pipeline.css`. Applied to both `.recipe-block__category` (`RecipeBlock.js`) and `.block-library__item` (`BlockLibrary.js`, as a left border accent) per the "optionally" note.
 
-- [ ] **Task 16 — "Random Mutation" block: matrix row-sum validation (pale red)**
+  **Judge verdict (2026-07-10): `[DONE]`.** Colors chosen distinct from existing base-pair colors (`--base-a/c/g/t`) and from `--app-accent`/`--success`/`--danger` to avoid visual collision.
+
+  **Files:** `frontend/src/views/pipeline/blockDefinitions.js`, `RecipeBlock.js`, `BlockLibrary.js`, `pipeline.css`, `frontend/src/styles/base.css`.
+
+- [x] **Task 16 — "Random Mutation" block: matrix row-sum validation (pale red)**
 
   `BlockForm.js`'s `Matrix4x4Field` already labels itself "(row = original base, column = mutated base)" — each **row** is a probability distribution over destination bases for a fixed original base, so rows (not columns) are what must sum to 1. Highlight a row pale-red when `|Σrow − 1| > 0.001` (small epsilon to avoid float-rounding false positives on entries like `0.33333`).
 
+  **Implemented 2026-07-10:** `Matrix4x4Field` now computes each row's sum and applies `.matrix-field__row--invalid` (pale-red `<td>` background) when `|sum - 1| > 0.001`, exactly the epsilon specified.
+
+  **Judge verdict (2026-07-10): `[DONE]`.**
+
   **Files:** `frontend/src/views/pipeline/BlockForm.js` (`Matrix4x4Field`), `pipeline.css`.
 
-- [ ] **Task 19 — Upload a FASTA (`.txt`) file to load the base sequence**
+- [x] **Task 19 — Upload a FASTA (`.txt`) file to load the base sequence**
 
   Add a file-upload control to `SessionBar.js` alongside the existing textarea. Parsing rules for the header/body split the user's example demonstrates:
   - Header line starts with `>` — everything after it is the sequence's display name. `workspace.initSession(sequence, name)` already accepts a `name` param; wire the parsed header text into it (no backend change needed).
@@ -136,11 +160,15 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Flag, don't silently resolve:** the user's own example sequence is all `N` (unknown base), but `isValidSequence()` today only accepts strict ACGT (`workspace.js`: `"Sequence must contain only A, C, G, T characters."`). A literal `N`-only FASTA would be parsed correctly by this task and then rejected by existing validation — that's expected/acceptable for this task's scope (surface the existing validation error, don't change what sequences are valid), but call it out explicitly since it means the user's own sample file wouldn't load end-to-end without a separate, NOT-yet-planned task to support ambiguity codes.
 
-  **Files:** `frontend/src/components/shared/SessionBar.js`, `frontend/src/lib/sequence.js` (new `parseFasta()`). Touches the same file as Task 6 — coordinate or sequence the two.
+  **Implemented 2026-07-10:** `parseFasta()` added to `sequence.js` — skips blank lines and legacy `;` comment lines, captures the first `>` header as the name, rejects files with >1 header, concatenates and reuses `cleanSequence()` on the body. `SessionBar.js` got a hidden `<input type="file">` triggered by an "Upload FASTA…" button; on parse success it fills the existing textarea `draft` and a new `draftName` state (passed to both `loadSequenceIntoSession`/`initSession`, which already accepted a `name` param — no backend change needed, as anticipated). Parse errors surface via a dedicated `ErrorBanner`, separate from `ws.lastError`.
+
+  **Judge verdict (2026-07-10): `[DONE]`.** Independently re-verified `parseFasta()` against the user's exact example (`>1 dna:chromosome chromosome:GRCh38:1:1:50:1` + 50×`N`) by mirroring the identical line-by-line logic in Python — correctly extracts the full header as the name and the 50-base sequence. Confirmed the flagged N-only caveat holds (would be correctly rejected downstream by existing `isValidSequence()`, not silently accepted) — this is the intended scope boundary, not a bug.
+
+  **Files:** `frontend/src/components/shared/SessionBar.js`, `frontend/src/lib/sequence.js` (new `parseFasta()`).
 
 ### Backend + Frontend (large — architecturally significant)
 
-- [ ] **Task 17 — Pattern-based operations track one variant per match occurrence** (backend)
+- [x] **Task 17 — Pattern-based operations track one variant per match occurrence** (backend)
 
   **Current behavior confirmed:** `AlterationFunctionsByPattern.replace()` / `.delete_by_pattern()` (`app/domain/sequence_functions.py`) use `re.sub()` — a single pass that rewrites **every** match at once, tracked as **one** `_track_alteration()` entry. Requested: if a pattern has N matches (e.g. `"aaa"→"ccc"` matching twice), produce N separately tracked variants, each reflecting only *one* match changed with the others left as in the pre-operation sequence.
 
@@ -150,9 +178,15 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Tests:** extend `app/test/test_mixins.py` / `test_alteration_functions.py` with multi-match cases for both `replace` and `delete_by_pattern`.
 
-  **Files:** `app/domain/sequence_functions.py`, `app/domain/mixins.py` (if `_track_alteration()` needs a variant-range parameter), tests.
+  **Implemented 2026-07-10:** `_track_alteration()` (`mixins.py`) gained optional `match_start`/`match_end` kwargs (0-based, inclusive), stored on the entry only when set. `replace()`/`delete_by_pattern()` (`sequence_functions.py`) now enumerate `re.finditer()` matches against the pre-operation sequence via a shared `_track_pattern_match_variants()` helper: for each match (only when there are ≥2 — a single match is already fully represented by the main entry), builds the single-match-only variant, temporarily swaps `self.altered_sequence` to it, calls `_track_alteration()` with a disambiguated label (`"replace:aaa->ttt[match 1/2]@4"`) and the match range, then restores it. `self.altered_sequence` (the forward-chaining value) is unaffected — exactly the documented design decision.
 
-- [ ] **Task 18 — Highlight pattern-match regions pale-red on Tracked Alteration output charts** (blocked on Task 17)
+  **Bug found and fixed during implementation (not part of the original ask, but load-bearing):** each variant's `_track_alteration()` call persists `current_altered_sequence` to Redis (used by every subsequent request to reconstruct the session's `InternalGeneticVariant`) — since `self.altered_sequence` is temporarily swapped to the variant's one-off sequence during that call, the *last* variant tracked would otherwise leave Redis pointing at a throwaway branch instead of the real chain result, silently corrupting every operation chained after a multi-match pattern op. Fixed with a new `_resync_current_altered_sequence()` on the mixin, called once after the variant loop finishes. Caught via live reproduction (chained a `delete` after a 2-match `replace` and found the working sequence corrupted), not by the unit tests alone — added a dedicated regression test for the exact invariant (`test_replace_variants_do_not_corrupt_persisted_current_altered_sequence`).
+
+  **Judge verdict (2026-07-10): `[DONE]`, independently re-verified live.** Reproduced against the real backend (not just the unit-test stub): `replace(old="aaa", new="ttt")` on `"cccaaacccaaaccc"` (2 matches) produced exactly 3 entries — the all-matches-replaced main entry plus 2 variants, each showing only its own match changed (`ccctttcccaaaccc` / `cccaaaccctttccc`) — and confirmed chaining a subsequent `delete` afterward used the correct working sequence, not a variant. `pytest app/test/test_mixins.py` — 24/24 pass (18 baseline + 6 new: 2 replace-variant tests, 1 single-match-no-duplicate test, 2 delete-by-pattern-variant tests, 1 Redis-persistence regression test). Full suite: 43 pre-existing failures unchanged, 4 new passes.
+
+  **Files:** `app/domain/sequence_functions.py`, `app/domain/mixins.py`, `app/test/test_mixins.py`.
+
+- [x] **Task 18 — Highlight pattern-match regions pale-red on Tracked Alteration output charts** (blocked on Task 17)
 
   On every Tracked Alteration output chart (Pipeline's `ProbaHistoryOutput`, Workbench's `TrackedProbabilities` in `HistoryLog.js`, Compare's proba-mode charts in `DetailChart.js`), shade the x-axis position range of each pattern-based variant's specific match, in pale red, using the match-range data Task 17 now stores per entry.
 
@@ -160,7 +194,29 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Coordinate with Task 10 and Task 13** — all three modify `Chart.js`; land last among the three, verify against the earlier two.
 
-  **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/views/pipeline/OutputPanel.js`, `frontend/src/views/dashboard/panels/HistoryLog.js`, `frontend/src/views/comparative/DetailChart.js`.
+  **Implemented 2026-07-10 (no new plugin needed):** rather than a separate annotation plugin, unified this with Task 20's zone-marking mechanism (also a per-bar colored border, landing at the same time) — `trackedEntryZone(label, entry)` (`sequence.js`) picks `entry.match_start`/`match_end` (Task 17, when present — a specific pattern match) over the generic `parseTrackedLabel()` range, and `TrackedAlterationEntry` (`OutputPanel.js`) colors the border pale-red for a pattern-match entry vs. pale-green otherwise (label text colored to match). This sidesteps the original "two overlapping borders on the same bars" coordination concern noted in Task 20's plan: a pattern match *is* the entry's whole affected zone for that variant, so there's one border, correctly colored per entry type, not two. `DetailChart.js`'s proba-mode rows get this for free by reusing `TrackedAlterationEntry`.
+
+  **Judge verdict (2026-07-10): `[DONE]`, independently re-verified live.** Reproduced a 2-match `replace` against the real backend and confirmed via `/get/allsimpleprobas` that the main entry has no `match_start`/`match_end` (falls back to the generic zone, correctly `null` for `replace:` per Task 8, so no border) while both variant entries carry the correct 0-based match ranges (`[3,5]` and `[9,11]`) that `trackedEntryZone()` picks up as pattern matches. No new Chart.js plugin was added, so no plugin-conflict surface with Task 13's `chartjs-plugin-zoom` exists for this task. Full backend suite re-run — no regressions (this task was frontend-only; the backend data it consumes was already verified under Task 17/20).
+
+  **Files:** `frontend/src/lib/sequence.js` (`trackedEntryZone()`), `frontend/src/views/pipeline/OutputPanel.js`, `frontend/src/views/dashboard/panels/HistoryLog.js`, `frontend/src/styles/base.css`, `frontend/src/views/dashboard/dashboard.css`. `DetailChart.js` required no direct change (inherits via `TrackedAlterationEntry` reuse).
+
+- [x] **Task 20 — Tracked Alteration output: delta-vs-base bar charts, split donor/acceptor, pale-green zone labeling** (backend + frontend, planned 2026-07-10)
+
+  **Goal:** replace the Tracked Alteration block's current output (one line chart per tracked entry showing *absolute* baseline probability) with **delta-vs-base-sequence bar charts**: for each tracked entry, per position, `delta = altered_proba[i] - base_proba[i]`. Bars render as the delta height; a positive delta's *added* portion is green, a negative delta's *removed* portion is red (mirrors `/GetDeltaScore/`'s existing sign convention, just visualized as a bar instead of a signed line). **Split into two charts per tracked entry** — one for acceptor, one for donor — replacing today's single combined chart.
+
+  **Scope decision (confirmed with user 2026-07-10) — same-length entries only:** a per-position diff against the base sequence is only well-defined when the tracked entry's altered sequence is the same length as the base (point/matrix mutations, and any index/pattern op whose net effect doesn't change length). For length-changing entries (insert/delete/move/copy-paste-with-different-`length_paste`, `delete_by_pattern`, non-equal-length `replace`), **keep the existing absolute-probability chart** for that entry instead, with a short inline note (e.g. "Delta view not available — this operation changes sequence length") so the user isn't shown a silently-wrong or truncated diff. Do not attempt prefix-alignment or index-truncation workarounds.
+
+  **Backend:** `_track_alteration()` (`app/domain/mixins.py`) already stores `altered_sequence` per entry and the base sequence is in `base_sequence`. Add a per-entry delta computation reusing `GeneralServices.return_proba_delta()`'s existing math (`app/services/general_services.py:105-138` — same sign convention, same `delta_proportion_variation` shape) when `len(altered_sequence) == len(base_sequence)`; store the result (or a flag indicating "not applicable") on the entry so `GET /get/allsimpleprobas` can surface it without every consumer recomputing it. Decide during implementation whether to compute eagerly (at track-time, cost paid once) or lazily (only when `/get/allsimpleprobas` is called, cost paid per read) — eager is likely simpler given `_track_alteration()` already runs one model call per entry.
+
+  **Frontend:** `frontend/src/views/pipeline/OutputPanel.js`'s `ProbaHistoryOutput` (and the same-shaped consumers in Workbench's `HistoryLog.js` `TrackedProbabilities` and Compare's proba-mode `DetailChart.js`) render two `Chart` instances (`type: "bar"`) per entry instead of one `line` chart, coloring each bar green (increase) or red (decrease) per Chart.js's per-point `backgroundColor` array support. Reuse Task 8's `parseTrackedLabel()` `{from, to}` range (already computed for the hover-highlight feature) to render the entry's own label string in pale green and mark the same `[from, to]` zone (start/end index) on the chart itself in pale green — this is a *different* range/color purpose from Task 18's pale-red pattern-match shading (Task 18 highlights a specific sub-match *within* a pattern-based variant; this pale-green marks the *entry's own* overall affected zone, for any operation type with a determinable range). **Coordinate note:** for a same-length pattern-based variant (Task 17) with exactly one match, Task 18's red range and this task's green range may coincide exactly — acceptable (they're layered, not exclusive), but land whichever of Task 18/20 is second and verify the combination isn't visually confusing (e.g. use `border` for one and `background` for the other rather than two overlapping fills).
+
+  **Coordinate with Task 13 and Task 18** — all three touch the same Tracked-Alteration chart call sites (`OutputPanel.js`, `HistoryLog.js`, `DetailChart.js`) and/or `Chart.js` itself; whichever lands last verifies no regression against the earlier two.
+
+  **Implemented 2026-07-10:** Extracted `compute_delta_result()` from `GeneralServices.return_proba_delta()` into a standalone pure function (`general_services.py`) — same math, but callable without triggering `return_proba_delta()`'s own `apply_mutations()` side effect (which would have mutated `self.sequence`/`self.altered_sequence` based on `self.mutations`, an unrelated and unsafe side channel to trigger from inside alteration tracking). `_track_alteration()` now computes `delta_proba` via this helper whenever `len(self.sequence) == len(altered_seq)`, reusing the already-computed `proba` (altered) and one additional `result_per_sequences(using_altered_sequence=False)` call (base) — stored on the entry only when computed. `GET /get/allsimpleprobas` passes `delta_proba`/`match_start`/`match_end` through when present. Frontend: new `TrackedAlterationEntry` component (`OutputPanel.js`, exported for reuse) renders two `type:"bar"` charts (acceptor/donor) with `deltaBarColors()` (green/red per-bar fill by sign) and `zoneBorderStyle()` (colored per-bar border marking the entry's `[from,to]` zone, via new plain per-index array styling — no new annotation plugin needed). Falls back to the pre-existing line chart + note for length-changing entries. Wired into Pipeline's `ProbaHistoryOutput`, Compare's `DetailChart.js` (`row.kind === "proba"` branch — reuses the exact same component so the two stay in sync), and Workbench's `HistoryLog.js` (kept its existing compact peak-summary format rather than adding full charts there, but switched its data source to delta and added the same pale zone-label styling — a deliberate proportionality choice, flagged for the user to reconsider if full charts are wanted there too).
+
+  **Judge verdict (2026-07-10): `[DONE]`, independently re-verified live.** Confirmed `return_proba_delta()`'s refactor is behavior-preserving via a live `/GetDeltaScore/` call (identical response shape/values to before). Confirmed `delta_proba` appears end-to-end via `/get/allsimpleprobas` for a same-length tracked alteration (`insert` with matching overwrite length) and is absent for a length-changing one (verified both via live backend calls and dedicated `test_mixins.py` tests). Cross-checked the zone math: for `"insert:gggg@5"`, `parseTrackedLabel()`'s `[4,7]` (0-based) range lines up exactly with the real `delta_proba` positions showing a change. `pytest app/test/test_mixins.py` — all pass (2 new delta-specific tests on top of Task 17's). Sandbox caveat (no browser) applies to the actual chart rendering/coloring, verified only by data-shape tracing.
+
+  **Files:** `app/domain/mixins.py`, `app/services/general_services.py`, `app/router/get_router.py`, `frontend/src/views/pipeline/OutputPanel.js`, `frontend/src/views/dashboard/panels/HistoryLog.js`, `frontend/src/views/dashboard/dashboard.css`, `frontend/src/views/comparative/DetailChart.js`, `frontend/src/lib/sequence.js` (`deltaBarColors()`, `zoneBorderStyle()`, `trackedEntryZone()`), `frontend/src/styles/base.css`, tests in `app/test/test_mixins.py`.
 
 ---
 

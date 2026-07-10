@@ -137,9 +137,11 @@ function Matrix4x4Field({ field, value, onChange }) {
           </tr>
         </thead>
         <tbody>
-          ${MUTATION_MATRIX_BASES.map(
-            (rowBase, r) => html`
-              <tr key=${rowBase}>
+          ${MUTATION_MATRIX_BASES.map((rowBase, r) => {
+            const rowSum = (matrix[r] ?? []).reduce((s, v) => s + (Number(v) || 0), 0);
+            const rowInvalid = Math.abs(rowSum - 1) > 0.001;
+            return html`
+              <tr key=${rowBase} class=${rowInvalid ? "matrix-field__row--invalid" : ""}>
                 <th>${rowBase}</th>
                 ${MUTATION_MATRIX_BASES.map(
                   (_, c) => html`
@@ -156,10 +158,11 @@ function Matrix4x4Field({ field, value, onChange }) {
                   `
                 )}
               </tr>
-            `
-          )}
+            `;
+          })}
         </tbody>
       </table>
+      <p class="field-hint">Rows highlighted in red do not sum to 1.</p>
     </div>
   `;
 }

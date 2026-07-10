@@ -1,7 +1,7 @@
 import { html, useState } from "../../lib/preact.js";
 import { SessionBar } from "../../components/shared/SessionBar.js";
 import { Spinner } from "../../components/shared/Feedback.js";
-import { useWorkspace } from "../../lib/workspace.js";
+import { useWorkspace, workspace } from "../../lib/workspace.js";
 import { api } from "../../api/client.js";
 import { parseTrackedLabel, parseMutation, diffToPointMutations } from "../../lib/sequence.js";
 import { BlockLibrary } from "./BlockLibrary.js";
@@ -280,20 +280,23 @@ export function PipelineView() {
           <div class="recipe-stack scroll-y" onDragOver=${handleStackDragOver} onDrop=${handleStackDrop} onDragLeave=${handleStackDragLeave}>
             ${recipe.length === 0
               ? html`<div class="recipe-stack__empty">Click or drag an operation from the left to build your recipe.</div>`
-              : recipe.map(
-                  (block, index) => html`
-                    <${RecipeBlock}
-                      key=${block.uid}
-                      block=${block}
-                      def=${blockById(block.defId)}
-                      index=${index}
-                      onParamsChange=${updateParams}
-                      onRemove=${removeBlock}
-                      onToggle=${toggleBlock}
-                      onDropOnMutationList=${handleDropOnMutationList}
-                      dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
-                    />
-                  `
+              : recipe.flatMap(
+                  (block, index) => [
+                    html`<div key=${`gap-${block.uid}`} class="recipe-gap ${overIndex === index ? "recipe-gap--active" : ""}"></div>`,
+                    html`
+                      <${RecipeBlock}
+                        key=${block.uid}
+                        block=${block}
+                        def=${blockById(block.defId)}
+                        index=${index}
+                        onParamsChange=${updateParams}
+                        onRemove=${removeBlock}
+                        onToggle=${toggleBlock}
+                        onDropOnMutationList=${handleDropOnMutationList}
+                        dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
+                      />
+                    `,
+                  ]
                 )}
             <div
               class="recipe-stack__tail ${overIndex === recipe.length ? "recipe-block--drop-target" : ""}"

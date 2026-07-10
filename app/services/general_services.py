@@ -8,6 +8,39 @@ from app.schemas.typing import *
 from app.test.global_var import GlobalVar
 from app.domain.initialization.initalize_my_model import my_model
 
+def compute_delta_result(sequence: str, altered_sequence: str, non_altered_result: JSON, altered_result: JSON) -> JSON:
+    """Per-position delta (altered - base) for acceptor/donor probabilities.
+
+    Pure function extracted from ``GeneralServices.return_proba_delta`` so it
+    can be reused (e.g. by ``_track_alteration`` for Task 20's per-tracked-entry
+    delta charts) without going through ``return_proba_delta``'s own
+    ``apply_mutations()`` call, which mutates ``self.sequence``/``self.altered_sequence``
+    based on ``self.mutations`` -- not a safe side effect to trigger from
+    inside alteration tracking, where ``self.mutations`` isn't necessarily
+    empty and isn't related to the tracked alteration at all.
+
+    Args:
+        sequence: the base (non-altered) sequence.
+        altered_sequence: the altered sequence -- must be the same length as
+            ``sequence`` (position-wise diff only makes sense then).
+        non_altered_result: ``result_per_sequences()``-shaped dict for ``sequence``.
+        altered_result: ``result_per_sequences()``-shaped dict for ``altered_sequence``.
+    """
+    delta_score_result = {"acceptor_proba": {}, "donor_proba": {}}
+    for key in ("acceptor_proba", "donor_proba"):
+        for i in range(len(altered_sequence)):
+            altered_value = altered_result[key][i][altered_sequence[i]]
+            delta_value = altered_value - non_altered_result[key][i][sequence[i]]
+
+            delta_score_result[key][i] = {"value": delta_value}
+
+            try:
+                delta_score_result[key][i]["delta_proportion_variation"] = delta_value / altered_value
+            except ZeroDivisionError:
+                delta_score_result[key][i]["delta_proportion_variation"] = -1
+    return delta_score_result
+
+
 class GeneralServices:
     """
     Base class providing sequence mutation and scoring services.
@@ -119,20 +152,7 @@ class GeneralServices:
                                                                                     specified_models_used=specified_models_used
                                                                                             
                                                                                         )
-        delta_score_result = {"acceptor_proba": {}, "donor_proba": {}}
-
-        for key in ("acceptor_proba", "donor_proba"):
-            for i in range(len(self.altered_sequence)):
-                altered_value = altered_result[key][i][self.altered_sequence[i]]
-                delta_value = altered_value - non_altered_result[key][i][self.sequence[i]]
-
-                delta_score_result[key][i] = {"value": delta_value}
-
-                try:
-                    delta_score_result[key][i]["delta_proportion_variation"] = delta_value / altered_value
-                except ZeroDivisionError:
-                    delta_score_result[key][i]["delta_proportion_variation"] = -1
-
+        delta_score_result = compute_delta_result(self.sequence, self.altered_sequence, non_altered_result, altered_result)
         delta_score_result["altered sequence"] = self.altered_sequence
         delta_score_result["name"] = self.name
         return delta_score_result

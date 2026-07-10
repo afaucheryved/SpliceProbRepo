@@ -2,7 +2,7 @@ import { html } from "../../lib/preact.js";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
-import { flattenProbaTrack, flattenDeltaTrack } from "../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
 // type is `dict[set[mut], float]` but the actual runtime keys are Python
@@ -45,26 +45,33 @@ function ProbaOutput({ data, sequence }) {
   `;
 }
 
-function ProbaHistoryOutput({ data }) {
-  const entries = Object.entries(data ?? {});
-  // Each entry has its own "altered sequence", representing the sequence
-  // state at that tracked step.
-  if (entries.length === 0) {
-    return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
-  }
-  return html`
-    <div>
-      <p class="output-panel__hint">
-        Baseline splicing probability per tracked alteration (one chart per entry, chronological order).
-      </p>
-      ${entries.map(([label, entry]) => {
+// One tracked-alteration entry's output. Delta-vs-base-sequence bar charts,
+// split acceptor/donor, bars colored green (increase) / red (decrease)
+// (Task 20). The label and a bar border are colored to mark either:
+//   - pale red (Task 18): this entry is one of Task 17's per-match
+//     pattern-based variants -- the border marks that specific match, using
+//     the exact range Task 17 stored on the entry (`match_start`/`match_end`).
+//   - pale green (Task 20): any other entry with a determinable affected
+//     zone (from `parseTrackedLabel()`).
+// Falls back to the pre-Task-20 absolute-probability chart when the entry's
+// altered sequence changed length (no sound position-wise delta against the
+// base -- see `delta_proba`'s absence).
+export function TrackedAlterationEntry({ label, entry }) {
+  const entrySeq = entry["altered sequence"];
+  const { range, isPatternMatch } = trackedEntryZone(label, entry);
+  const zoneColor = isPatternMatch ? "#fecaca" : "#bbf7d0";
+  const zoneLabelClass = isPatternMatch ? "output-panel__history-label--match" : "output-panel__history-label--zone";
+  const zoneText = range
+    ? ` (${isPatternMatch ? "match" : "positions"} ${range.from + 1}-${range.to + 1})`
+    : "";
+
+  if (!entry.delta_proba) {
     const acceptor = flattenProbaTrack(entry.acceptor_proba);
     const donor = flattenProbaTrack(entry.donor_proba);
-    // The "altered sequence" field holds the sequence state at this step.
-    const entrySeq = entry["altered sequence"];
     return html`
       <div class="output-panel__history-entry" key=${label}>
         <p class="output-panel__history-label mono">${label}</p>
+        <p class="field-hint">Delta view not available — this operation changes the sequence length.</p>
         <${Chart}
           type="line"
           height=${160}
@@ -78,7 +85,62 @@ function ProbaHistoryOutput({ data }) {
         />
       </div>
     `;
-      })}
+  }
+
+  const acceptor = flattenDeltaTrack(entry.delta_proba.acceptor_proba);
+  const donor = flattenDeltaTrack(entry.delta_proba.donor_proba);
+  const acceptorZone = zoneBorderStyle(acceptor.positions, range, zoneColor);
+  const donorZone = zoneBorderStyle(donor.positions, range, zoneColor);
+  return html`
+    <div class="output-panel__history-entry" key=${label}>
+      <p class="output-panel__history-label ${zoneLabelClass} mono">${label}${zoneText}</p>
+      <${Chart}
+        type="bar"
+        height=${140}
+        labels=${acceptor.positions.map((p) => p + 1)}
+        datasets=${[
+          {
+            label: "Δ acceptor",
+            data: acceptor.values,
+            backgroundColor: deltaBarColors(acceptor.values),
+            borderColor: acceptorZone.borderColor,
+            borderWidth: acceptorZone.borderWidth,
+          },
+        ]}
+        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ acceptor probability" } } } }}
+        sequence=${entrySeq}
+      />
+      <${Chart}
+        type="bar"
+        height=${140}
+        labels=${donor.positions.map((p) => p + 1)}
+        datasets=${[
+          {
+            label: "Δ donor",
+            data: donor.values,
+            backgroundColor: deltaBarColors(donor.values),
+            borderColor: donorZone.borderColor,
+            borderWidth: donorZone.borderWidth,
+          },
+        ]}
+        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ donor probability" } } } }}
+        sequence=${entrySeq}
+      />
+    </div>
+  `;
+}
+
+function ProbaHistoryOutput({ data }) {
+  const entries = Object.entries(data ?? {});
+  if (entries.length === 0) {
+    return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
+  }
+  return html`
+    <div>
+      <p class="output-panel__hint">
+        Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
+      </p>
+      ${entries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
     </div>
   `;
 }

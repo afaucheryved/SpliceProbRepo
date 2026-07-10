@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 
 from app.services.redis_session import set_session_data, get_session_data
 from app.domain.mixins import reconstruct_altered_sequence, AlteredSequenceTrackerMixin
+from app.domain.sequence_functions import AlterationFunctionsByPattern
 
 
 # ---------------------------------------------------------------------------
@@ -387,3 +388,174 @@ class TestTrackAlterationNoOneHot:
             "reconstruction (fix for bounded-delete / non-default-length bugs)."
         )
         assert entry["altered_sequence"] == "atcgatcg"
+
+
+# ---------------------------------------------------------------------------
+# Tests for pattern-based per-match variant tracking (Task 17)
+# ---------------------------------------------------------------------------
+
+class _PatternHost(AlterationFunctionsByPattern):
+    """Real AlterationFunctionsByPattern, with result_per_sequences stubbed
+    (same stub shape as _StubHost) so no real SpliceAI model call is needed.
+    """
+
+    def __init__(self, sequence: str):
+        self.sequence = sequence
+        self.altered_sequence = sequence
+        self.session_id = None
+        self.there_is_change = False
+
+    def result_per_sequences(self, using_altered_sequence: bool = False):
+        seq = self.altered_sequence if using_altered_sequence else self.sequence
+        return {
+            "acceptor_proba": {i: {b: 0.5} for i, b in enumerate(seq)},
+            "donor_proba": {i: {b: 0.5} for i, b in enumerate(seq)},
+        }
+
+
+class TestPatternMatchVariants:
+    """`replace`/`delete_by_pattern` must track one additional entry per
+    match, each reflecting only that one match changed -- without altering
+    the single working `altered_sequence` the rest of the pipeline chains
+    onto (the "explicit design decision" in docs/ai/progress.md Task 17).
+    """
+
+    def test_replace_two_matches_tracks_two_variants_plus_main_entry(self):
+        base = "ccc" + "aaa" + "ccc" + "aaa" + "ccc"  # "aaa" at [3,6) and [9,12)
+        host = _PatternHost(base)
+        host.session_id = "test_replace_variants"
+        set_session_data(host.session_id, "base_sequence", base)
+
+        host.replace(old="aaa", new="ttt")
+
+        # The working sequence keeps chaining from the all-matches result.
+        expected_all_replaced = base[:3] + "ttt" + base[6:9] + "ttt" + base[12:]
+        assert host.altered_sequence == expected_all_replaced
+
+        entries = get_session_data(host.session_id, "altered_sequences")
+        assert len(entries) == 3, "expected 1 main entry + 2 per-match variants"
+
+        main_entry = entries[0]
+        assert main_entry["mutation"]["human"] == "replace:aaa->ttt"
+        assert main_entry["altered_sequence"] == expected_all_replaced
+        assert "match_start" not in main_entry
+
+        variant_1, variant_2 = entries[1], entries[2]
+        assert variant_1["mutation"]["human"] == "replace:aaa->ttt[match 1/2]@4"
+        assert variant_1["match_start"] == 3
+        assert variant_1["match_end"] == 5
+        # Only the first match is replaced; the second is untouched.
+        assert variant_1["altered_sequence"] == base[:3] + "ttt" + base[6:]
+
+        assert variant_2["mutation"]["human"] == "replace:aaa->ttt[match 2/2]@10"
+        assert variant_2["match_start"] == 9
+        assert variant_2["match_end"] == 11
+        assert variant_2["altered_sequence"] == base[:9] + "ttt" + base[12:]
+
+        # The working sequence is unaffected by having tracked the variants.
+        assert host.altered_sequence == expected_all_replaced
+
+    def test_replace_single_match_does_not_duplicate(self):
+        base = "ccc" + "aaa" + "ccc"  # "aaa" occurs exactly once
+        host = _PatternHost(base)
+        host.session_id = "test_replace_single_match"
+        set_session_data(host.session_id, "base_sequence", base)
+
+        host.replace(old="aaa", new="ttt")
+
+        entries = get_session_data(host.session_id, "altered_sequences")
+        assert len(entries) == 1, "a single match should not produce a redundant duplicate entry"
+
+    def test_delete_by_pattern_two_matches_tracks_two_variants(self):
+        base = "ccc" + "aaa" + "ccc" + "aaa" + "ccc"  # "aaa" at [3,6) and [9,12)
+        host = _PatternHost(base)
+        host.session_id = "test_delete_by_pattern_variants"
+        set_session_data(host.session_id, "base_sequence", base)
+
+        host.delete_by_pattern(pattern="aaa")
+
+        expected_all_deleted = base[:3] + base[6:9] + base[12:]
+        assert host.altered_sequence == expected_all_deleted
+
+        entries = get_session_data(host.session_id, "altered_sequences")
+        assert len(entries) == 3
+
+        variant_1, variant_2 = entries[1], entries[2]
+        assert variant_1["mutation"]["human"] == "delete_by_pattern:aaa[match 1/2]@4"
+        assert variant_1["match_start"] == 3
+        assert variant_1["match_end"] == 5
+        assert variant_1["altered_sequence"] == base[:3] + base[6:]
+
+        assert variant_2["mutation"]["human"] == "delete_by_pattern:aaa[match 2/2]@10"
+        assert variant_2["match_start"] == 9
+        assert variant_2["match_end"] == 11
+        assert variant_2["altered_sequence"] == base[:9] + base[12:]
+
+        # The working sequence is unaffected by having tracked the variants.
+        assert host.altered_sequence == expected_all_deleted
+
+    def test_replace_variants_do_not_corrupt_persisted_current_altered_sequence(self):
+        """Regression test: each variant's _track_alteration call persists its
+        own (one-off) sequence as Redis's `current_altered_sequence` while
+        `self.altered_sequence` is temporarily swapped -- a later request
+        reconstructs a *fresh* InternalGeneticVariant from that Redis value
+        (see `create_internal_variant`), so if it's left pointing at a variant
+        instead of the real chain-forward result, every subsequent chained
+        operation in the session silently corrupts from there.
+        """
+        base = "ccc" + "aaa" + "ccc" + "aaa" + "ccc"
+        host = _PatternHost(base)
+        host.session_id = "test_replace_variants_no_corruption"
+        set_session_data(host.session_id, "base_sequence", base)
+
+        host.replace(old="aaa", new="ttt")
+
+        expected_all_replaced = base[:3] + "ttt" + base[6:9] + "ttt" + base[12:]
+        # This is exactly what create_internal_variant() reads to initialise
+        # a freshly-reconstructed instance's altered_sequence on the next
+        # request -- it must match the real chain result, not a variant.
+        assert get_session_data(host.session_id, "current_altered_sequence") == expected_all_replaced
+
+
+# ---------------------------------------------------------------------------
+# Tests for per-entry delta-vs-base computation (Task 20)
+# ---------------------------------------------------------------------------
+
+class TestTrackAlterationDeltaProba:
+    def test_same_length_entry_gets_delta_proba(self):
+        """A same-length alteration (e.g. matrix mutation) should get a
+        computed `delta_proba` field shaped like `return_proba_delta()`'s
+        output (per-position `value`/`delta_proportion_variation`).
+        """
+        host = _StubHost(sequence="atcgatcg", altered_sequence="atcgatcg")
+        host.session_id = "test_delta_same_length"
+        set_session_data(host.session_id, "base_sequence", "atcgatcg")
+
+        host._track_alteration("mutate_independently")
+
+        entry = get_session_data(host.session_id, "altered_sequences")[0]
+        assert "delta_proba" in entry
+        for key in ("acceptor_proba", "donor_proba"):
+            assert key in entry["delta_proba"]
+            assert len(entry["delta_proba"][key]) == len("atcgatcg")
+            for pos_result in entry["delta_proba"][key].values():
+                assert "value" in pos_result
+                assert "delta_proportion_variation" in pos_result
+                # _StubHost.result_per_sequences returns 0.5 for every base,
+                # both for the base and the altered sequence -> delta is 0.
+                assert pos_result["value"] == 0
+
+    def test_length_changing_entry_has_no_delta_proba(self):
+        """A length-changing structural edit (e.g. a delete) has no sound
+        position-wise diff against the base sequence -- `delta_proba` must
+        be entirely absent (not a wrong/empty value) so the frontend falls
+        back to the absolute-probability chart for that entry.
+        """
+        host = _StubHost(sequence="atcgatcg", altered_sequence="atcg")
+        host.session_id = "test_delta_length_changed"
+        set_session_data(host.session_id, "base_sequence", "atcgatcg")
+
+        host._track_alteration("delete:5")
+
+        entry = get_session_data(host.session_id, "altered_sequences")[0]
+        assert "delta_proba" not in entry

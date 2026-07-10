@@ -1,5 +1,6 @@
-import { html, useState } from "../../lib/preact.js";
+import { html, useState, useRef } from "../../lib/preact.js";
 import { workspace, useWorkspace } from "../../lib/workspace.js";
+import { parseFasta } from "../../lib/sequence.js";
 import { ErrorBanner, Spinner } from "./Feedback.js";
 
 const SAMPLE_SEQUENCE =
@@ -17,12 +18,15 @@ const SAMPLE_SEQUENCE =
 export function SessionBar({ compact = false }) {
   const ws = useWorkspace();
   const [draft, setDraft] = useState(ws.baseSequence || SAMPLE_SEQUENCE);
+  const [draftName, setDraftName] = useState("workspace");
+  const [fastaError, setFastaError] = useState(null);
+  const fileInputRef = useRef(null);
 
   async function handleLoadSequence(e) {
     e.preventDefault();
     if (!ws.sessionId) return;
     try {
-      await workspace.loadSequenceIntoSession(draft);
+      await workspace.loadSequenceIntoSession(draft, draftName);
     } catch {
       // surfaced via ws.lastError
     }
@@ -31,10 +35,29 @@ export function SessionBar({ compact = false }) {
   async function handleNewSession(e) {
     e.preventDefault();
     try {
-      await workspace.initSession(draft);
+      await workspace.initSession(draft, draftName);
     } catch {
       // surfaced via ws.lastError
     }
+  }
+
+  function handleFastaFile(e) {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = ""; // allow re-uploading the same filename later
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { name, sequence, error } = parseFasta(String(reader.result ?? ""));
+      if (error) {
+        setFastaError(error);
+        return;
+      }
+      setFastaError(null);
+      setDraft(sequence);
+      setDraftName(name);
+    };
+    reader.onerror = () => setFastaError("Could not read the file.");
+    reader.readAsText(file);
   }
 
   return html`
@@ -66,6 +89,22 @@ export function SessionBar({ compact = false }) {
           >
             Start new session
           </button>
+          <input
+            ref=${fileInputRef}
+            type="file"
+            accept=".txt,.fasta,.fa"
+            class="session-bar__file-input"
+            onChange=${handleFastaFile}
+          />
+          <button
+            type="button"
+            class="btn"
+            disabled=${ws.busy}
+            title="Upload a single-record FASTA (.txt) file to fill in the sequence above"
+            onClick=${() => fileInputRef.current?.click()}
+          >
+            Upload FASTA…
+          </button>
           ${ws.busy ? html`<${Spinner} label="Contacting backend…" />` : null}
           ${ws.sessionId
             ? html`
@@ -77,6 +116,7 @@ export function SessionBar({ compact = false }) {
             : null}
         </div>
       </form>
+      <${ErrorBanner} message=${fastaError} onDismiss=${() => setFastaError(null)} />
       <${ErrorBanner} message=${ws.lastError} onDismiss=${() => workspace.clearError()} />
     </div>
   `;

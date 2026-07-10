@@ -120,6 +120,23 @@
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
 }
 
+/* Precise "insert here" gap indicator (Task 12), supplementing the
+   whole-block highlight above. Collapsed to ~0 height until a drag is
+   hovering directly over the block that follows it. */
+.recipe-gap {
+  height: 0;
+  margin: 0;
+  border-radius: 999px;
+  background: transparent;
+  transition: height 0.08s ease, background 0.08s ease;
+}
+
+.recipe-gap--active {
+  height: 4px;
+  margin: -2px 0;
+  background: var(--app-accent);
+}
+
 .recipe-block__header {
   display: flex;
   align-items: center;
@@ -159,6 +176,24 @@
   padding: 0.05rem 0.45rem;
 }
 
+.recipe-block__category--scoring {
+  color: var(--category-scoring);
+  border-color: var(--category-scoring);
+}
+
+.recipe-block__category--analysis {
+  color: var(--category-analysis);
+  border-color: var(--category-analysis);
+}
+
+.block-library__item--scoring {
+  border-left: 3px solid var(--category-scoring);
+}
+
+.block-library__item--analysis {
+  border-left: 3px solid var(--category-analysis);
+}
+
 .recipe-block__toggle {
   margin: 0;
 }
@@ -182,6 +217,31 @@
   color: #86efac;
   font-size: 0.72rem;
   font-family: var(--font-mono);
+}
+
+.recipe-block__result--expandable {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.recipe-block__result--expandable:hover {
+  text-decoration: underline;
+}
+
+.recipe-block__tracked-list {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.7rem;
+  color: #9ca3af;
+  font-family: var(--font-mono);
+}
+
+.recipe-block__tracked-list li {
+  padding: 0.05rem 0;
 }
 
 .block-form {
@@ -237,6 +297,10 @@
 .matrix-field td {
   padding: 0.15rem 0.3rem;
   text-align: center;
+}
+
+.matrix-field__row--invalid td {
+  background: rgba(239, 68, 68, 0.18);
 }
 
 .matrix-field input {

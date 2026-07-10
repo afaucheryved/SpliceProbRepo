@@ -107,6 +107,16 @@ async def get_allsimpleprobas(session_id: str = Query(..., description="Session 
             label = f"{i}: {entry.get('mutation', {}).get('human', '')}"
             proba_simple = dict(entry.get("proba_simple", {}))
             proba_simple["altered sequence"] = altered_sequence
+            # Per-position delta vs the base sequence, when available (Task 20)
+            # -- only computed at tracking time for same-length entries; absent
+            # otherwise, in which case the frontend falls back to the absolute
+            # baseline-probability chart for that entry.
+            if "delta_proba" in entry:
+                proba_simple["delta_proba"] = entry["delta_proba"]
+            if "match_start" in entry:
+                proba_simple["match_start"] = entry["match_start"]
+            if "match_end" in entry:
+                proba_simple["match_end"] = entry["match_end"]
             result[label] = proba_simple
         return result
     except Exception as e:

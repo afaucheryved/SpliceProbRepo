@@ -22,6 +22,67 @@ export function buildMutation(position, ref, alt) {
   return `>p.${position}.${ref.toLowerCase()}>${alt.toLowerCase()}`;
 }
 
+// Parse a single-record FASTA file's text content (Task 19).
+//
+// Conventions handled:
+//   - Header line starts with '>' — everything after it is the display name.
+//   - Legacy ';' comment lines (older Pearson/Lipman FASTA dialect) are
+//     ignored, as are blank lines anywhere in the file.
+//   - All other non-empty lines are sequence lines: leading/trailing
+//     whitespace is stripped per line, then lines are concatenated —
+//     FASTA line-wrapping is formatting only, never meaningful.
+//   - A file with more than one '>' header is rejected outright (multi-record
+//     files are out of scope — never silently used-first-record-only or
+//     concatenated-across-records).
+//   - Case/whitespace normalization of the final sequence reuses the
+//     existing `cleanSequence()`/`isValidSequence()` rather than
+//     reimplementing DNA validation here; callers should still run
+//     `isValidSequence()` on the result before using it (e.g. an all-`N`
+//     FASTA file parses fine here but is rejected by the existing strict
+//     ACGT-only validation — that's expected, not a bug in this parser).
+//
+// Returns `{ name, sequence, error }` — `error` is null on success.
+export function parseFasta(text) {
+  if (typeof text !== "string" || text.trim() === "") {
+    return { name: null, sequence: null, error: "The file is empty." };
+  }
+
+  const lines = text.split(/\r\n|\r|\n/);
+  let name = null;
+  let headerCount = 0;
+  const bodyLines = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line === "") continue; // blank lines are formatting only
+    if (line.startsWith(";")) continue; // legacy FASTA comment line
+    if (line.startsWith(">")) {
+      headerCount++;
+      if (headerCount === 1) name = line.slice(1).trim();
+      continue;
+    }
+    bodyLines.push(line);
+  }
+
+  if (headerCount === 0) {
+    return { name: null, sequence: null, error: "Not a FASTA file — missing a header line starting with '>'." };
+  }
+  if (headerCount > 1) {
+    return {
+      name: null,
+      sequence: null,
+      error: `This file contains ${headerCount} records (multiple '>' headers) — only single-record FASTA files are supported.`,
+    };
+  }
+
+  const sequence = cleanSequence(bodyLines.join(""));
+  if (!sequence) {
+    return { name, sequence: null, error: "No sequence data found after the header line." };
+  }
+
+  return { name: name || "uploaded sequence", sequence, error: null };
+}
+
 // Parse ">p.8.a>c" -> { position: 8, ref: "a", alt: "c" }; null if malformed/empty.
 export function parseMutation(mutation) {
   const m = /^>p\.(\d+)\.([atgcATGC])>([atgcATGC])$/.exec(mutation);
@@ -80,6 +141,40 @@ export function flattenDeltaTrack(deltaByIndex) {
   const values = indices.map((i) => deltaByIndex[i].value);
   const proportions = indices.map((i) => deltaByIndex[i].delta_proportion_variation);
   return { positions: indices, values, proportions };
+}
+
+// Task 20: per-bar green (increase) / red (decrease) fill for a delta-vs-base
+// bar chart, one color per position in `values`.
+export function deltaBarColors(values) {
+  return values.map((v) => (v >= 0 ? "#22c55e" : "#ef4444"));
+}
+
+// Task 20 (generic operation zone, pale green) / Task 18 (specific
+// pattern-match sub-region, pale red): per-bar colored border to mark a
+// `{from, to}` range (0-based inclusive, same coordinate space as
+// `positions`) directly on a delta bar chart, without a separate annotation
+// plugin. Bars outside the range (or when `range` is null -- position not
+// determinable) get no border.
+export function zoneBorderStyle(positions, range, color = "#bbf7d0") {
+  if (!range) {
+    return { borderColor: positions.map(() => "transparent"), borderWidth: positions.map(() => 0) };
+  }
+  const borderColor = positions.map((p) => (p >= range.from && p <= range.to ? color : "transparent"));
+  const borderWidth = positions.map((p) => (p >= range.from && p <= range.to ? 2 : 0));
+  return { borderColor, borderWidth };
+}
+
+// Task 17 stores a pattern match's exact position directly on the entry
+// (`match_start`/`match_end`, 0-based inclusive) so this doesn't need to be
+// re-parsed from the label. Falls back to the generic operation-zone range
+// from `parseTrackedLabel()` for entries that aren't a specific pattern
+// match. Returns `{ range, isPatternMatch }` -- `isPatternMatch` selects the
+// pale-red (Task 18) vs. pale-green (Task 20) color at the call site.
+export function trackedEntryZone(label, entry) {
+  if (entry?.match_start != null && entry?.match_end != null) {
+    return { range: { from: entry.match_start, to: entry.match_end }, isPatternMatch: true };
+  }
+  return { range: parseTrackedLabel(label), isPatternMatch: false };
 }
 
 // Parse a tracked-alteration human label (e.g. "insert:aaaa@12", "delete:2",

@@ -2,7 +2,7 @@ import { html, useState } from "../../../lib/preact.js";
 import { Badge } from "../../../components/shared/Feedback.js";
 import { useWorkspace } from "../../../lib/workspace.js";
 import { api } from "../../../api/client.js";
-import { flattenProbaTrack } from "../../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack, trackedEntryZone } from "../../../lib/sequence.js";
 
 const TONE = { init: "accent", structural: "positive", probe: "neutral", error: "negative" };
 
@@ -53,13 +53,24 @@ function TrackedProbabilities() {
       ${probas === null && !error ? html`<p class="field-hint">Not loaded yet — click Refresh.</p>` : null}
       ${probas !== null && rows.length === 0 ? html`<p class="field-hint">No alterations tracked yet.</p>` : null}
       ${rows.map(([label, entry]) => {
-        const acceptorPeak = peak(flattenProbaTrack(entry.acceptor_proba));
-        const donorPeak = peak(flattenProbaTrack(entry.donor_proba));
+        // Task 20: report the change vs. the base sequence (delta) when
+        // available, falling back to absolute baseline probability for
+        // length-changing entries (no sound position-wise delta there).
+        const hasDelta = Boolean(entry.delta_proba);
+        const acceptorPeak = peak(hasDelta ? flattenDeltaTrack(entry.delta_proba.acceptor_proba) : flattenProbaTrack(entry.acceptor_proba));
+        const donorPeak = peak(hasDelta ? flattenDeltaTrack(entry.delta_proba.donor_proba) : flattenProbaTrack(entry.donor_proba));
+        const { range, isPatternMatch } = trackedEntryZone(label, entry);
+        const zoneText = range ? ` (${isPatternMatch ? "match" : "positions"} ${range.from + 1}-${range.to + 1})` : "";
+        const zoneLabelClass = isPatternMatch ? "history-log__label--match" : "history-log__label--zone";
         return html`
           <div class="history-log__proba-entry" key=${label}>
-            <span class="history-log__label mono">${label}</span>
+            <span class="history-log__label ${zoneLabelClass} mono">${label}${zoneText}</span>
             <span class="history-log__proba-values">
-              acceptor ${acceptorPeak.value.toFixed(3)}@${acceptorPeak.position ?? "—"} · donor ${donorPeak.value.toFixed(3)}@${donorPeak.position ?? "—"}
+              ${hasDelta ? "Δ " : ""}acceptor
+              <span class=${hasDelta ? (acceptorPeak.value >= 0 ? "history-log__value--up" : "history-log__value--down") : ""}>${acceptorPeak.value.toFixed(3)}</span>@${acceptorPeak.position ?? "—"}
+              · ${hasDelta ? "Δ " : ""}donor
+              <span class=${hasDelta ? (donorPeak.value >= 0 ? "history-log__value--up" : "history-log__value--down") : ""}>${donorPeak.value.toFixed(3)}</span>@${donorPeak.position ?? "—"}
+              ${!hasDelta ? html`<span class="field-hint"> (delta not available — length-changing operation)</span>` : null}
             </span>
           </div>
         `;

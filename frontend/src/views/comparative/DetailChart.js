@@ -16,6 +16,9 @@ export function DetailChart({ row }) {
   const donor = flatten(row.resultData.donor_proba);
   const acceptorLabel = isProba ? "Acceptor gain" : "Δ acceptor";
   const donorLabel = isProba ? "Donor gain" : "Δ donor";
+  // Both delta and proba response shapes include an "altered sequence" field
+  // that the backend computes as the sequence state for this entry.
+  const seq = row.resultData?.["altered sequence"];
   return html`
     <div>
       <p class="field-hint">Per-position ${isProba ? "baseline" : "Δ"} trace for <strong class="mono">${row.mutation}</strong></p>
@@ -27,6 +30,7 @@ export function DetailChart({ row }) {
           { label: acceptorLabel, data: acceptor.values, borderColor: "#2563eb", pointRadius: 0, borderWidth: 1.5 },
           { label: donorLabel, data: donor.values, borderColor: "#d97706", pointRadius: 0, borderWidth: 1.5 },
         ]}
+        sequence=${seq}
       />
     </div>
   `;

@@ -106,3 +106,48 @@ Independently reproduced the **exact scenario from the original bug report** —
 - **Task 6 — `[FAILED]`** — one-line tooltip-text fix, routed back to `[WORKER]`.
 - **Task 7 — `[DONE]`**
 - **Task 8 — `[FAILED]`** — `parseTrackedLabel()` fixes for `move`/`copy_paste` (wrong position) and `replace`/`delete_by_pattern`/`mutate_independently` (fabricated position), routed back to `[WORKER]`.
+
+## Judge Review — Tasks 6, 8, 9, 10, 11 (2026-07-10)
+
+### Task 6 — `[DONE]`, re-verified
+
+Confirmed the one-line fix landed exactly as instructed: the disabled "Load sequence" button's tooltip now reads `"No active session yet — click 'Start new session' first"` (`SessionBar.js`), no longer circular. Nothing else in the task changed.
+
+### Task 8 — `[DONE]`, re-verified via live reproduction
+
+Re-ran the fix against a live backend session rather than trusting the diff alone. Reset a session, ran `POST /altbyindex/move` with `start_cc=3, end_cc=6, index_paste=20` on a periodic `atcg`-repeat sequence, then read back the tracked label and altered sequence from `GET /get/allsimpleprobas`. Backend returned label `"move:3-6->@16"` (the paste index already cut-adjusted, as `sequence_functions.py`'s `move()` does internally) and `altered_sequence[15:19] == "cgat"` — exactly the moved 4-base pattern. `parseTrackedLabel()`'s new destination-range math (`destStart = index_paste-1`, `patternLen = end_cc-start_cc+1`, range `[destStart, destStart+patternLen-1]`) computes `[15, 18]` — matches the live ground truth precisely, for both the paste-index cut-adjustment and the pattern-length derivation. `copy_paste` uses structurally identical math (not re-run live again, but the code path is the same shape). Confirmed `replace`/`delete_by_pattern`/`mutate_independently` now return `null` instead of the fabricated `{from:0, to:0}`, and `OutputPanel.js`'s dead `buildOperationsMap()` is gone.
+
+### Task 9 — `[DONE]`, re-verified via live reproduction, with one unrelated regression found & fixed
+
+Verified `diffToPointMutations()` against a live backend call: reset a session, ran `POST /altbyindex/insert` with `pattern="gggg", index=10, length=4` (a same-length overwrite) on a periodic sequence, and manually position-diffed the before/after altered sequences. Got exactly `>p.10.t>g`, `>p.11.c>g`, `>p.13.a>g` — position 12 correctly omitted since that base didn't change (was already `g`). This matches `diffToPointMutations()`'s logic exactly (1-based position, per-character comparison, skip unchanged). The length-mismatch rejection path was reviewed in code (rejects when `before.length !== after.length` with a clear message) — not independently re-run live, but it's a simple guard clause with no live-data dependency. Drop-target wiring reviewed: `MutationListField`'s `handleDragOver` filters on the `application/x-recipe-block-uid` MIME type so Library-panel drags (a different type) are correctly ignored, and `handleDropOnMutationList()` rejects non-Index/Pattern source categories with a clear inline error.
+
+**Regression found and fixed (shipped in the same commit as Task 9, not part of its own diff but a real break):** `frontend/src/views/pipeline/pipeline.css` line 1 read `op the .pipeline-view {` instead of `.pipeline-view {` — an invalid CSS selector (parses as a descendant-combinator chain matching nonexistent `<op>`/`<the>` elements) that silently no-ops the entire top-level Pipeline view's flex layout (column direction, gap, padding — all inert). Likely a stray paste/typo during editing. Fixed directly by the Judge in this pass rather than routed back, since it's a one-character-class typo with an obvious, unambiguous fix.
+
+### Task 10 — `[DONE]` after a coordinate-system bug found and fixed during this review
+
+**Confirmed bug:** `Chart.js`'s click handler computed the popup's `x`/`y` as **viewport-relative** coordinates (`canvas.getBoundingClientRect().left/top + point.x/y` — `getBoundingClientRect()` is always relative to the viewport). But `Popover.js` rendered with `position: absolute`, nested inside `Chart.js`'s `position: relative` wrapper div. Per the CSS spec, `position: absolute` is positioned relative to its nearest positioned ancestor's padding box — here, that wrapper div — not the viewport. Since the canvas fills that div with no offset, this double-counts the wrapper's own on-page position: `left: rect.left + point.x` inside a container already offset by `rect.left` from the viewport places the popup at viewport-x `≈ 2 × rect.left + point.x` instead of the intended `rect.left + point.x`. The further down/right the chart sits on the page, the further off-target the popup would appear — worst near the bottom of long dashboard/compare pages, where a click could open a popup entirely off-screen. A secondary tell: `Chart.js` declared a `containerRef`, attached it to the wrapper div, and never read it anywhere — dead code consistent with an abandoned attempt at this exact fix.
+
+**Fix applied:** changed `Popover`'s inline style from `position:absolute` to `position:fixed` — this matches the viewport-relative coordinate space the click handler already computes, and matches the existing `window.innerWidth/innerHeight` edge-clamps (which only make sense against viewport coordinates in the first place — another sign the code's two halves disagreed on coordinate space). Removed the now-unused `containerRef` from `Chart.js` and corrected the stale "relative to the chart container" doc comments in `Popover.js`.
+
+**Independently verified beyond the fix:**
+- Traced all 5 wired call sites (`ProbaOutput`/`DeltaOutput`/`ProbaHistoryOutput` in Pipeline, `GenomeTrack` in Workbench, `DetailChart` in Compare) — all pass 1-based `position` labels (`positions.map(p => p+1)`) and a `sequence` string indexable by that same convention.
+- Confirmed both `/GetDeltaScore/`-shaped and `/GetSimpleProb/`-shaped session responses populate `result["altered sequence"]` (`app/services/general_services.py:102` and `:136`), so `DetailChart.js`'s assumption that both its delta- and proba-mode rows carry that field is correct for both branches, not just one.
+- `GenomeTrack.js`'s windowed chart slice filters positions for the visible window but does not re-base them to the window start, so labels stay absolute indices into the full `ws.alteredSequence` passed as `sequence` — no off-by-window-offset bug.
+- `ManhattanChart` is correctly excluded (no `sequence` prop wired to it); confirmed the onClick-merge logic (`if (userOnClick) userOnClick(...)` called unconditionally before the popup logic) preserves its existing row-focus click behavior.
+
+**Sandbox caveat (same as prior frontend tasks):** no browser/Node available in this environment; this fix and its verification are static reasoning over the CSS positioning model plus live backend data cross-checks for the data itself, not a rendered click-and-see test. A human should click a chart peak in a live browser before the next release to confirm the popup lands at the cursor, not just trust this review's reasoning.
+
+### Task 11 — `[DONE]`, re-confirmed
+
+No code change needed. Re-checked the static analysis against the current tree: still no `user-select: none` outside `.sequence-track__gutter`/`.data-table th`, still no custom mouse/select handlers anywhere in the frontend JS.
+
+### Full-suite regression check
+
+`pytest app/test/test_mixins.py app/test/test_redis_session.py` → 34/34 pass (unchanged from the last verified baseline). `pytest app/test/` → 43 failed / 41 passed — diffed the failing-test names against the previously-documented pre-existing failure set: identical. This task batch touched only frontend files plus the one `pipeline.css` fix, so no backend regression was expected or found.
+
+### Verdict
+- **Task 6 — `[DONE]`**
+- **Task 8 — `[DONE]`**
+- **Task 9 — `[DONE]`** (plus an unrelated same-commit `pipeline.css` regression found and fixed)
+- **Task 10 — `[DONE]`** (after fixing a popover coordinate-system bug found during this review)
+- **Task 11 — `[DONE]`**

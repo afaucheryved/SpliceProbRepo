@@ -1,4 +1,4 @@
-op the .pipeline-view {
+.pipeline-view {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;

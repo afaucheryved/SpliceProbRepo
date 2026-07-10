@@ -81,6 +81,7 @@ export function GenomeTrack({ highlightRanges = [] }) {
                   { label: "Acceptor", data: chartSlice.acceptor, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
                   { label: "Donor", data: chartSlice.donor, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
                 ]}
+                sequence=${ws.alteredSequence}
               />
             </div>
           `

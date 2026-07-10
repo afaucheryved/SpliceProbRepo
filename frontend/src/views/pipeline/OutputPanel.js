@@ -23,7 +23,7 @@ function SequenceOutput({ sequence, operations }) {
   `;
 }
 
-function ProbaOutput({ data }) {
+function ProbaOutput({ data, sequence }) {
   const acceptor = flattenProbaTrack(data.acceptor_proba);
   const donor = flattenProbaTrack(data.donor_proba);
   return html`
@@ -39,6 +39,7 @@ function ProbaOutput({ data }) {
           { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
         ]}
         options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
+        sequence=${sequence}
       />
     </div>
   `;
@@ -46,6 +47,8 @@ function ProbaOutput({ data }) {
 
 function ProbaHistoryOutput({ data }) {
   const entries = Object.entries(data ?? {});
+  // Each entry has its own "altered sequence", representing the sequence
+  // state at that tracked step.
   if (entries.length === 0) {
     return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
   }
@@ -55,29 +58,32 @@ function ProbaHistoryOutput({ data }) {
         Baseline splicing probability per tracked alteration (one chart per entry, chronological order).
       </p>
       ${entries.map(([label, entry]) => {
-        const acceptor = flattenProbaTrack(entry.acceptor_proba);
-        const donor = flattenProbaTrack(entry.donor_proba);
-        return html`
-          <div class="output-panel__history-entry" key=${label}>
-            <p class="output-panel__history-label mono">${label}</p>
-            <${Chart}
-              type="line"
-              height=${160}
-              labels=${acceptor.positions.map((p) => p + 1)}
-              datasets=${[
-                { label: "Acceptor gain", data: acceptor.values, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
-                { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
-              ]}
-              options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
-            />
-          </div>
-        `;
+    const acceptor = flattenProbaTrack(entry.acceptor_proba);
+    const donor = flattenProbaTrack(entry.donor_proba);
+    // The "altered sequence" field holds the sequence state at this step.
+    const entrySeq = entry["altered sequence"];
+    return html`
+      <div class="output-panel__history-entry" key=${label}>
+        <p class="output-panel__history-label mono">${label}</p>
+        <${Chart}
+          type="line"
+          height=${160}
+          labels=${acceptor.positions.map((p) => p + 1)}
+          datasets=${[
+            { label: "Acceptor gain", data: acceptor.values, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
+            { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
+          ]}
+          options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
+          sequence=${entrySeq}
+        />
+      </div>
+    `;
       })}
     </div>
   `;
 }
 
-function DeltaOutput({ data }) {
+function DeltaOutput({ data, sequence }) {
   const acceptor = flattenDeltaTrack(data.acceptor_proba);
   const donor = flattenDeltaTrack(data.donor_proba);
   return html`
@@ -91,6 +97,7 @@ function DeltaOutput({ data }) {
           { label: "Δ donor", data: donor.values, backgroundColor: "#fbbf24" },
         ]}
         options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ probability" } } } }}
+        sequence=${sequence}
       />
     </div>
   `;
@@ -119,12 +126,15 @@ export function OutputPanel({ result }) {
     return html`<p class="output-panel__hint">Run the recipe to see output here.</p>`;
   }
   const { kind, data, operations } = result;
+  // Extract the "altered sequence" from the response if present; used as
+  // the context for chart peak-click popups (Task 10).
+  const seq = data?.["altered sequence"];
   return html`
     <div class="output-panel">
       ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} operations=${operations} />` : null}
-      ${kind === "proba" ? html`<${ProbaOutput} data=${data} />` : null}
+      ${kind === "proba" ? html`<${ProbaOutput} data=${data} sequence=${seq} />` : null}
       ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} />` : null}
-      ${kind === "delta" ? html`<${DeltaOutput} data=${data} />` : null}
+      ${kind === "delta" ? html`<${DeltaOutput} data=${data} sequence=${seq} />` : null}
       ${kind === "zones" ? html`<${ZonesOutput} data=${data} />` : null}
     </div>
   `;

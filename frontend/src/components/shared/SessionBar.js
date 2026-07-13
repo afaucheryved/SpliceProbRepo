@@ -20,6 +20,7 @@ export function SessionBar({ compact = false }) {
   const [draft, setDraft] = useState(ws.baseSequence || SAMPLE_SEQUENCE);
   const [draftName, setDraftName] = useState("workspace");
   const [fastaError, setFastaError] = useState(null);
+  const [ensemblId, setEnsemblId] = useState("");
   const fileInputRef = useRef(null);
 
   async function handleLoadSequence(e) {
@@ -36,6 +37,19 @@ export function SessionBar({ compact = false }) {
     e.preventDefault();
     try {
       await workspace.initSession(draft, draftName);
+    } catch {
+      // surfaced via ws.lastError
+    }
+  }
+
+  async function handleEnsemblFetch(e) {
+    e.preventDefault();
+    const id = ensemblId.trim();
+    if (!id) return;
+    try {
+      const sequence = await workspace.fetchEnsemblSequence(id);
+      setDraft(sequence);
+      setDraftName(id);
     } catch {
       // surfaced via ws.lastError
     }
@@ -104,6 +118,26 @@ export function SessionBar({ compact = false }) {
             onClick=${() => fileInputRef.current?.click()}
           >
             Upload FASTA…
+          </button>
+          <input
+            type="text"
+            class="session-bar__ensembl-input"
+            placeholder="Ensembl ID…"
+            value=${ensemblId}
+            disabled=${ws.busy}
+            onInput=${(e) => setEnsemblId(e.currentTarget.value)}
+            onKeyDown=${(e) => {
+              if (e.key === "Enter") handleEnsemblFetch(e);
+            }}
+          />
+          <button
+            type="button"
+            class="btn"
+            disabled=${ws.busy || !ensemblId.trim()}
+            title="Fetch this Ensembl ID's sequence into the field above for review"
+            onClick=${handleEnsemblFetch}
+          >
+            Fetch Ensembl
           </button>
           ${ws.busy ? html`<${Spinner} label="Contacting backend…" />` : null}
           ${ws.sessionId

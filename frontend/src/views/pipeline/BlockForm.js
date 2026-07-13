@@ -43,7 +43,7 @@ function SelectField({ field, value, onChange }) {
   `;
 }
 
-function MutationListField({ field, value, onChange, blockUid, onDropOnMutationList }) {
+function MutationListField({ field, value, onChange, blockUid, onDropOnMutationList, onDropLibraryBlock }) {
   const rows = value ?? [];
   const [dropError, setDropError] = useState(null);
   const [dropOver, setDropOver] = useState(false);
@@ -55,8 +55,15 @@ function MutationListField({ field, value, onChange, blockUid, onDropOnMutationL
   const remove = (i) => onChange(rows.filter((_, idx) => idx !== i));
 
   function handleDragOver(e) {
-    // Only accept drops from recipe blocks (not from the library).
-    if (!e.dataTransfer.types.includes("application/x-recipe-block-uid")) return;
+    // Accept drops from already-placed recipe blocks (translate their
+    // before/after diff) and from the library palette (add + prompt to Bake
+    // first, since a library block has no diff to translate yet).
+    if (
+      !e.dataTransfer.types.includes("application/x-recipe-block-uid") &&
+      !e.dataTransfer.types.includes("application/x-block-id")
+    ) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     setDropOver(true);
@@ -71,6 +78,14 @@ function MutationListField({ field, value, onChange, blockUid, onDropOnMutationL
     e.stopPropagation();
     setDropOver(false);
     setDropError(null);
+
+    const libraryBlockId = e.dataTransfer.getData("application/x-block-id");
+    if (libraryBlockId && onDropLibraryBlock) {
+      const result = onDropLibraryBlock(blockUid, libraryBlockId);
+      if (result && result.error) setDropError(result.error);
+      return;
+    }
+
     const sourceUid = e.dataTransfer.getData("application/x-recipe-block-uid");
     if (!sourceUid || !onDropOnMutationList) return;
     const result = onDropOnMutationList(blockUid, sourceUid);
@@ -88,7 +103,7 @@ function MutationListField({ field, value, onChange, blockUid, onDropOnMutationL
     >
       <label>
         ${field.label}
-        <span class="field-hint"> — drag an Index-based or Pattern-based block here to append its mutations</span>
+        <span class="field-hint"> — drag an Index-based or Pattern-based block here (from the recipe or the library) to append its mutations</span>
       </label>
       ${dropError ? html`<p class="recipe-block__error">⚠ ${dropError}</p>` : null}
       ${rows.map(
@@ -202,7 +217,7 @@ const FIELD_COMPONENTS = {
 // Generic form renderer driven entirely by a block definition's `fields`
 // schema (see blockDefinitions.js) -- adding a new block never requires
 // touching this file.
-export function BlockForm({ def, params, onChange, blockUid, onDropOnMutationList }) {
+export function BlockForm({ def, params, onChange, blockUid, onDropOnMutationList, onDropLibraryBlock }) {
   const setField = (key, value) => onChange({ ...params, [key]: value });
   return html`
     <div class="block-form">
@@ -210,7 +225,7 @@ export function BlockForm({ def, params, onChange, blockUid, onDropOnMutationLis
         .filter((field) => !field.showIf || field.showIf(params))
         .map((field) => {
           const Field = FIELD_COMPONENTS[field.type] ?? TextField;
-          return html`<${Field} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} blockUid=${blockUid} onDropOnMutationList=${onDropOnMutationList} />`;
+          return html`<${Field} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} blockUid=${blockUid} onDropOnMutationList=${onDropOnMutationList} onDropLibraryBlock=${onDropLibraryBlock} />`;
         })}
     </div>
   `;

@@ -1,4 +1,4 @@
-import { html, useState } from "../../lib/preact.js";
+import { html, useState, useRef } from "../../lib/preact.js";
 import { SessionBar } from "../../components/shared/SessionBar.js";
 import { Spinner } from "../../components/shared/Feedback.js";
 import { useWorkspace, workspace } from "../../lib/workspace.js";
@@ -11,6 +11,14 @@ import { BLOCK_DEFINITIONS, blockById, defaultParams } from "./blockDefinitions.
 
 let uidSeq = 0;
 const nextUid = () => `blk_${++uidSeq}`;
+
+// Item 6: draggable column boundaries. Floors mirror the layout's previous
+// fixed sizes (240px library / 360px recipe / 320px output) so resizing can
+// never squeeze a column away entirely.
+const HANDLE_WIDTH = 8;
+const MIN_LIBRARY_WIDTH = 180;
+const MIN_RECIPE_WIDTH = 360;
+const MIN_OUTPUT_WIDTH = 320;
 
 function summarize(def, result) {
   switch (def.outputKind) {
@@ -36,6 +44,43 @@ export function PipelineView() {
   const [finalResult, setFinalResult] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
+  const [libraryWidth, setLibraryWidth] = useState(240);
+  const [recipeWidth, setRecipeWidth] = useState(420);
+  const columnsRef = useRef(null);
+  const resizeStateRef = useRef(null);
+
+  function handleResizeMove(e) {
+    const rs = resizeStateRef.current;
+    if (!rs) return;
+    const delta = e.clientX - rs.startX;
+    const gaps = HANDLE_WIDTH * 2;
+    if (rs.column === "library") {
+      const maxLibrary = Math.max(MIN_LIBRARY_WIDTH, rs.containerWidth - gaps - rs.startRecipe - MIN_OUTPUT_WIDTH);
+      setLibraryWidth(Math.min(Math.max(MIN_LIBRARY_WIDTH, rs.startLibrary + delta), maxLibrary));
+    } else if (rs.column === "recipe") {
+      const maxRecipe = Math.max(MIN_RECIPE_WIDTH, rs.containerWidth - gaps - rs.startLibrary - MIN_OUTPUT_WIDTH);
+      setRecipeWidth(Math.min(Math.max(MIN_RECIPE_WIDTH, rs.startRecipe + delta), maxRecipe));
+    }
+  }
+
+  function stopResize() {
+    resizeStateRef.current = null;
+    window.removeEventListener("mousemove", handleResizeMove);
+    window.removeEventListener("mouseup", stopResize);
+  }
+
+  function startResize(column, e) {
+    e.preventDefault();
+    resizeStateRef.current = {
+      column,
+      startX: e.clientX,
+      startLibrary: libraryWidth,
+      startRecipe: recipeWidth,
+      containerWidth: columnsRef.current?.getBoundingClientRect().width ?? 0,
+    };
+    window.addEventListener("mousemove", handleResizeMove);
+    window.addEventListener("mouseup", stopResize);
+  }
 
   function addBlock(defId, atIndex = recipe.length) {
     const def = blockById(defId);
@@ -261,13 +306,38 @@ export function PipelineView() {
     return { error: null };
   }
 
+  // Drop handler for dragging a block straight out of the library (never
+  // added to the recipe, so it has no before/after diff to translate yet --
+  // item 1). Adds it to the recipe right before the target scoring block and
+  // tells the user to Bake, then drag it again from the recipe stack (the
+  // path handleDropOnMutationList above already handles) to actually append
+  // its mutations.
+  function handleDropLibraryBlockOnMutationList(targetUid, libraryBlockId) {
+    const def = blockById(libraryBlockId);
+    if (!def) return { error: "Unknown block type." };
+    if (def.category !== "Index-based" && def.category !== "Pattern-based") {
+      return { error: `"${def.label}" blocks cannot be translated to point mutations — only Index-based and Pattern-based operations produce a sequence diff.` };
+    }
+    const targetIndex = recipe.findIndex((b) => b.uid === targetUid);
+    addBlock(libraryBlockId, targetIndex === -1 ? recipe.length : targetIndex);
+    return {
+      error: `"${def.label}" was added to your recipe. Bake, then drag it from the recipe stack (not the library) onto this field to append its mutations.`,
+    };
+  }
+
   return html`
     <div class="pipeline-view">
-      <div class="pipeline-view__columns">
+      <div
+        class="pipeline-view__columns"
+        ref=${columnsRef}
+        style=${`grid-template-columns: ${libraryWidth}px ${HANDLE_WIDTH}px ${recipeWidth}px ${HANDLE_WIDTH}px minmax(${MIN_OUTPUT_WIDTH}px, 1fr);`}
+      >
         <aside class="pipeline-view__library panel">
           <h3 class="panel__title">Operations</h3>
           <${BlockLibrary} onAdd=${(id) => addBlock(id)} />
         </aside>
+
+        <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("library", e)}></div>
 
         <section class="pipeline-view__recipe panel">
           <h3 class="panel__title">
@@ -293,6 +363,7 @@ export function PipelineView() {
                         onRemove=${removeBlock}
                         onToggle=${toggleBlock}
                         onDropOnMutationList=${handleDropOnMutationList}
+                        onDropLibraryBlock=${handleDropLibraryBlockOnMutationList}
                         dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
                       />
                     `,
@@ -311,6 +382,8 @@ export function PipelineView() {
             </div>
           </div>
         </section>
+
+        <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("recipe", e)}></div>
 
         <div class="pipeline-view__output-col">
           <div class="pipeline-view__session">

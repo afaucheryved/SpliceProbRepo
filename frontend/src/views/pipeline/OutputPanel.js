@@ -2,6 +2,7 @@ import { html } from "../../lib/preact.js";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
+import { useTheme, seriesColors } from "../../lib/theme.js";
 import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
@@ -23,7 +24,14 @@ function SequenceOutput({ sequence, operations }) {
   `;
 }
 
+// Item 7a: acceptor and donor gain are split into two separate chart
+// instances (rather than one two-line chart) so each reads clearly on its
+// own scale, but a click on either must still show both scores at that
+// position -- `companionDatasets` feeds the other series' values into this
+// chart's popover without this chart owning or rendering that data itself.
 function ProbaOutput({ data, sequence }) {
+  const theme = useTheme();
+  const colors = seriesColors(theme);
   const acceptor = flattenProbaTrack(data.acceptor_proba);
   const donor = flattenProbaTrack(data.donor_proba);
   return html`
@@ -33,12 +41,24 @@ function ProbaOutput({ data, sequence }) {
       </p>
       <${Chart}
         type="line"
+        height=${160}
         labels=${acceptor.positions.map((p) => p + 1)}
         datasets=${[
-          { label: "Acceptor gain", data: acceptor.values, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
-          { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
+          { label: "Acceptor gain", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, borderWidth: 1.5 },
         ]}
-        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
+        companionDatasets=${[{ label: "Donor gain", positions: donor.positions, values: donor.values }]}
+        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Acceptor probability" } } } }}
+        sequence=${sequence}
+      />
+      <${Chart}
+        type="line"
+        height=${160}
+        labels=${donor.positions.map((p) => p + 1)}
+        datasets=${[
+          { label: "Donor gain", data: donor.values, borderColor: colors.donor, pointRadius: 0, borderWidth: 1.5 },
+        ]}
+        companionDatasets=${[{ label: "Acceptor gain", positions: acceptor.positions, values: acceptor.values }]}
+        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Donor probability" } } } }}
         sequence=${sequence}
       />
     </div>
@@ -57,9 +77,11 @@ function ProbaOutput({ data, sequence }) {
 // altered sequence changed length (no sound position-wise delta against the
 // base -- see `delta_proba`'s absence).
 export function TrackedAlterationEntry({ label, entry }) {
+  const theme = useTheme();
+  const colors = seriesColors(theme);
   const entrySeq = entry["altered sequence"];
   const { range, isPatternMatch } = trackedEntryZone(label, entry);
-  const zoneColor = isPatternMatch ? "#fecaca" : "#bbf7d0";
+  const zoneColor = isPatternMatch ? colors.matchPale : colors.zonePale;
   const zoneLabelClass = isPatternMatch ? "output-panel__history-label--match" : "output-panel__history-label--zone";
   const zoneText = range
     ? ` (${isPatternMatch ? "match" : "positions"} ${range.from + 1}-${range.to + 1})`
@@ -77,8 +99,8 @@ export function TrackedAlterationEntry({ label, entry }) {
           height=${160}
           labels=${acceptor.positions.map((p) => p + 1)}
           datasets=${[
-            { label: "Acceptor gain", data: acceptor.values, borderColor: "#60a5fa", pointRadius: 0, borderWidth: 1.5 },
-            { label: "Donor gain", data: donor.values, borderColor: "#fbbf24", pointRadius: 0, borderWidth: 1.5 },
+            { label: "Acceptor gain", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, borderWidth: 1.5 },
+            { label: "Donor gain", data: donor.values, borderColor: colors.donor, pointRadius: 0, borderWidth: 1.5 },
           ]}
           options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
           sequence=${entrySeq}
@@ -102,7 +124,7 @@ export function TrackedAlterationEntry({ label, entry }) {
           {
             label: "Δ acceptor",
             data: acceptor.values,
-            backgroundColor: deltaBarColors(acceptor.values),
+            backgroundColor: deltaBarColors(acceptor.values, colors),
             borderColor: acceptorZone.borderColor,
             borderWidth: acceptorZone.borderWidth,
           },
@@ -118,7 +140,7 @@ export function TrackedAlterationEntry({ label, entry }) {
           {
             label: "Δ donor",
             data: donor.values,
-            backgroundColor: deltaBarColors(donor.values),
+            backgroundColor: deltaBarColors(donor.values, colors),
             borderColor: donorZone.borderColor,
             borderWidth: donorZone.borderWidth,
           },
@@ -146,6 +168,8 @@ function ProbaHistoryOutput({ data }) {
 }
 
 function DeltaOutput({ data, sequence }) {
+  const theme = useTheme();
+  const colors = seriesColors(theme);
   const acceptor = flattenDeltaTrack(data.acceptor_proba);
   const donor = flattenDeltaTrack(data.donor_proba);
   return html`
@@ -155,8 +179,8 @@ function DeltaOutput({ data, sequence }) {
         type="bar"
         labels=${acceptor.positions.map((p) => p + 1)}
         datasets=${[
-          { label: "Δ acceptor", data: acceptor.values, backgroundColor: "#60a5fa" },
-          { label: "Δ donor", data: donor.values, backgroundColor: "#fbbf24" },
+          { label: "Δ acceptor", data: acceptor.values, backgroundColor: colors.deltaAcceptor },
+          { label: "Δ donor", data: donor.values, backgroundColor: colors.deltaDonor },
         ]}
         options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ probability" } } } }}
         sequence=${sequence}

@@ -160,6 +160,26 @@ export const workspace = {
     });
   },
 
+  // Fetches a sequence from Ensembl by ID and returns the raw sequence text
+  // (item 4). Deliberately does NOT touch the current session/base sequence
+  // -- the returned session_id from POST /ensembl/get is discarded once the
+  // sequence text has been read back, so the caller can drop the text into a
+  // draft textarea for review/edit, exactly like a pasted or FASTA-uploaded
+  // sequence, before explicitly "Load sequence"-ing or starting a new session.
+  //
+  // Always omits session_id from the request (even if a session is already
+  // active) so the backend mints a fresh throwaway session for the fetch --
+  // verified live that passing an *existing* session_id here returns
+  // {status: "new_sequence_from_ensembl"} without actually updating that
+  // session's stored sequence, silently leaving GET /get/sequence pointed at
+  // the old text. Requesting a brand-new session every time sidesteps that.
+  async fetchEnsemblSequence(ensemblId) {
+    return withBusy(async () => {
+      const { session_id } = await api.ensembl.get({ ensembl_id: ensemblId });
+      return api.get.sequence(session_id);
+    });
+  },
+
   async refreshAlteredSequence() {
     const sessionId = requireSession();
     return withBusy(async () => {

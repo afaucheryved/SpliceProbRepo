@@ -16,10 +16,39 @@
 
 .pipeline-view__columns {
   display: grid;
-  grid-template-columns: 240px minmax(360px, 1fr) minmax(320px, 1fr);
-  gap: 0.85rem;
+  /* grid-template-columns is set inline (item 6) -- driven by draggable
+     column-boundary state in PipelineView.js. `gap` still applies on both
+     sides of the resize-handle columns, giving the handle some breathing
+     room instead of butting directly against the panels. */
+  gap: 0.4rem;
   flex: 1;
   min-height: 0;
+}
+
+/* Draggable boundary between two columns (item 6). A thin visible rule that
+   thickens/accents on hover so it reads as grabbable; col-resize signals the
+   drag direction. */
+.pipeline-view__resize-handle {
+  cursor: col-resize;
+  position: relative;
+  min-height: 0;
+}
+
+.pipeline-view__resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--app-border);
+  transition: background 0.1s ease;
+}
+
+.pipeline-view__resize-handle:hover::after,
+.pipeline-view__resize-handle:active::after {
+  background: var(--app-accent);
 }
 
 .pipeline-view__library,
@@ -49,7 +78,7 @@
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b7280;
+  color: var(--text-subtle);
   margin: 0.6rem 0 0.3rem;
 }
 
@@ -86,20 +115,32 @@
 }
 
 .recipe-stack__empty {
-  border: 1px dashed var(--app-border);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--app-border);
   border-radius: 8px;
   padding: 2rem 1rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
+/* Fills the remaining empty space below the last recipe block down to the
+   bottom of the scrollable stack, rather than sitting as a thin strip
+   (item 2) -- flex:1 as the stack's trailing flex item. */
 .recipe-stack__tail {
-  border: 1px dashed var(--app-border);
+  flex: 1;
+  min-height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--app-border);
   border-radius: 8px;
   padding: 0.5rem;
   text-align: center;
-  color: #4b5563;
+  color: var(--text-muted);
   font-size: 0.7rem;
 }
 
@@ -145,13 +186,13 @@
 
 .recipe-block__handle {
   cursor: grab;
-  color: #6b7280;
+  color: var(--text-subtle);
 }
 
 .recipe-block__collapse {
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-subtle);
   cursor: pointer;
   font-size: 0.7rem;
   padding: 0 0.15rem;
@@ -170,7 +211,7 @@
 
 .recipe-block__category {
   font-size: 0.65rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   border: 1px solid var(--app-border);
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
@@ -200,7 +241,7 @@
 
 .recipe-block__summary {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin: 0.3rem 0 0.5rem;
 }
 
@@ -209,12 +250,12 @@
 .recipe-block__status--running { color: var(--app-accent); }
 
 .recipe-block__error {
-  color: #fca5a5;
+  color: var(--danger-light);
   font-size: 0.72rem;
 }
 
 .recipe-block__result {
-  color: #86efac;
+  color: var(--success-light);
   font-size: 0.72rem;
   font-family: var(--font-mono);
 }
@@ -236,7 +277,7 @@
   margin: 0.2rem 0 0;
   padding-left: 1.1rem;
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
@@ -252,7 +293,7 @@
 
 .field-hint {
   font-size: 0.68rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   margin: 0.2rem 0;
 }
 
@@ -274,7 +315,7 @@
 
 .mutation-list__prefix {
   font-family: var(--font-mono);
-  color: #6b7280;
+  color: var(--text-subtle);
   font-size: 0.75rem;
 }
 
@@ -322,7 +363,7 @@
 
 .output-panel__hint {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .output-panel__history-entry {
@@ -339,6 +380,6 @@
 
 .output-panel__history-label {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin: 0 0 0.3rem;
 }

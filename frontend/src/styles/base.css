@@ -16,8 +16,43 @@
   --category-scoring: #eab308;
   --category-analysis: #06b6d4;
 
+  --text-muted: #9ca3af;
+  --text-subtle: #6b7280;
+  --text-faint: #4b5563;
+  --danger-light: #fca5a5;
+  --success-light: #86efac;
+  --zone-text: #bbf7d0;
+  --match-text: #fecaca;
+
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root[data-theme="light"] {
+  --base-a: #16a34a;
+  --base-c: #2563eb;
+  --base-g: #b45309;
+  --base-t: #dc2626;
+  --base-n: #6b7280;
+
+  --app-bg: #f8fafc;
+  --app-fg: #111827;
+  --app-border: #d1d5db;
+  --app-accent: #4f46e5;
+  --app-panel: #ffffff;
+  --app-panel-alt: #f3f4f6;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --category-scoring: #b45309;
+  --category-analysis: #0e7490;
+
+  --text-muted: #6b7280;
+  --text-subtle: #94a3b8;
+  --text-faint: #cbd5e1;
+  --danger-light: #dc2626;
+  --success-light: #16a34a;
+  --zone-text: #16a34a;
+  --match-text: #dc2626;
 }
 
 * {
@@ -74,7 +109,7 @@ button {
 }
 
 .app-header__subtitle {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
@@ -83,6 +118,12 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.app-header__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 /* ---- Segmented control (3-way toggle) ---- */
@@ -100,7 +141,7 @@ button {
   appearance: none;
   border: none;
   background: transparent;
-  color: #9ca3af;
+  color: var(--text-muted);
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
   cursor: pointer;
@@ -189,7 +230,7 @@ textarea {
 
 label {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   display: block;
   margin-bottom: 0.2rem;
 }
@@ -229,7 +270,7 @@ label {
 
 .session-bar__meta {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   background: var(--app-panel-alt);
   border: 1px solid var(--app-border);
   border-radius: 999px;
@@ -244,14 +285,18 @@ label {
   display: none;
 }
 
+.session-bar__ensembl-input {
+  width: 11rem;
+}
+
 /* ---- Tracked Alteration delta-bar output (Task 20) ---- */
 
 .output-panel__history-label--zone {
-  color: #bbf7d0;
+  color: var(--zone-text);
 }
 
 .output-panel__history-label--match {
-  color: #fecaca;
+  color: var(--match-text);
 }
 
 /* ---- Feedback ---- */
@@ -260,7 +305,7 @@ label {
   margin-top: 0.5rem;
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid var(--danger);
-  color: #fca5a5;
+  color: var(--danger-light);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -283,7 +328,7 @@ label {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .spinner__dot {
@@ -315,14 +360,14 @@ label {
 
 .stat-tile__label {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .stat-tile__sublabel {
   font-size: 0.68rem;
-  color: #6b7280;
+  color: var(--text-subtle);
 }
 
 .stat-tile--positive .stat-tile__value { color: var(--success); }
@@ -355,7 +400,7 @@ label {
 }
 
 .sequence-track--empty {
-  color: #6b7280;
+  color: var(--text-subtle);
   font-size: 0.8rem;
 }
 
@@ -367,7 +412,7 @@ label {
 }
 
 .sequence-track__gutter {
-  color: #6b7280;
+  color: var(--text-subtle);
   width: 3.5rem;
   text-align: right;
   user-select: none;
@@ -402,7 +447,7 @@ label {
 
 .sequence-track__truncated {
   margin-top: 0.4rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   font-size: 0.7rem;
 }
 
@@ -422,7 +467,7 @@ table.data-table {
 }
 
 .data-table th {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: 600;
   font-size: 0.68rem;
   text-transform: uppercase;
@@ -450,7 +495,7 @@ table.data-table {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin: 0 0 0.6rem 0;
   display: flex;
   align-items: center;
@@ -485,9 +530,9 @@ table.data-table {
   color: var(--app-accent);
 }
 
-.chart-toolbar__slider {
-  flex: 1;
-  max-width: 160px;
+.chart-toolbar__hint {
+  font-size: 0.7rem;
+  color: var(--text-subtle);
 }
 
 /* ---- Popover ---- */
@@ -514,7 +559,7 @@ table.data-table {
 .popover__close {
   background: none;
   border: none;
-  color: #9ca3af;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 1;
@@ -542,7 +587,7 @@ table.data-table {
 }
 
 .popover__label {
-  color: #9ca3af;
+  color: var(--text-muted);
   padding-right: 0.6rem;
 }
 
@@ -560,7 +605,7 @@ table.data-table {
 .popover__seq-label {
   display: block;
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   margin-bottom: 0.2rem;
 }
 
@@ -580,7 +625,7 @@ table.data-table {
   display: flex;
   justify-content: space-between;
   font-size: 0.6rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   margin-top: 0.15rem;
 }
 

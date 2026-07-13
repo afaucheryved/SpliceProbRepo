@@ -3,6 +3,7 @@ import { SegmentedControl } from "./components/shared/SegmentedControl.js";
 import { PipelineView } from "./views/pipeline/PipelineView.js";
 import { DashboardView } from "./views/dashboard/DashboardView.js";
 import { ComparativeView } from "./views/comparative/ComparativeView.js";
+import { useTheme, toggleTheme } from "./lib/theme.js";
 
 const PROPOSALS = [
   { value: "pipeline", label: "Pipeline", hint: "CyberChef-style" },
@@ -19,6 +20,7 @@ const VIEW_COMPONENTS = {
 export function App() {
   const [proposal, setProposal] = useState("pipeline");
   const ActiveView = VIEW_COMPONENTS[proposal];
+  const theme = useTheme();
 
   return html`
     <header class="app-header">
@@ -26,7 +28,17 @@ export function App() {
         <span class="app-header__title">SpliceProb</span>
         <span class="app-header__subtitle">Three frontend concepts over the SpliceAI splicing-impact API</span>
       </div>
-      <${SegmentedControl} options=${PROPOSALS} value=${proposal} onChange=${setProposal} />
+      <div class="app-header__controls">
+        <${SegmentedControl} options=${PROPOSALS} value=${proposal} onChange=${setProposal} />
+        <button
+          type="button"
+          class="btn btn--small theme-toggle"
+          title=${theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          onClick=${toggleTheme}
+        >
+          ${theme === "dark" ? "☀ Light" : "☾ Dark"}
+        </button>
+      </div>
     </header>
     <main class="app-main">
       <${ActiveView} />

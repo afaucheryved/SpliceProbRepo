@@ -144,9 +144,14 @@ export function flattenDeltaTrack(deltaByIndex) {
 }
 
 // Task 20: per-bar green (increase) / red (decrease) fill for a delta-vs-base
-// bar chart, one color per position in `values`.
-export function deltaBarColors(values) {
-  return values.map((v) => (v >= 0 ? "#22c55e" : "#ef4444"));
+// bar chart, one color per position in `values`. `colors` is a
+// `{ deltaPositive, deltaNegative }` pair (see lib/theme.js `seriesColors()`)
+// so the fill is theme-aware -- Chart.js needs literal color strings, not
+// unresolved CSS var() references, for canvas fills (item 3).
+export function deltaBarColors(values, colors) {
+  const positive = colors?.deltaPositive ?? "#22c55e";
+  const negative = colors?.deltaNegative ?? "#ef4444";
+  return values.map((v) => (v >= 0 ? positive : negative));
 }
 
 // Task 20 (generic operation zone, pale green) / Task 18 (specific

@@ -12,7 +12,7 @@ const STATUS_ICON = {
 
 // A single stackable, draggable recipe card. Reordering is native HTML5
 // drag-and-drop (no extra dependency) driven by the parent PipelineView.
-export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onDropOnMutationList, dragHandlers }) {
+export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onDropOnMutationList, onDropLibraryBlock, dragHandlers }) {
   const [collapsed, setCollapsed] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   // Only the "Tracked Alterations" block (probaHistory output) has a
@@ -50,7 +50,7 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
       ${!collapsed
         ? html`
             <p class="recipe-block__summary">${def.summary}</p>
-            <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} blockUid=${block.uid} onDropOnMutationList=${onDropOnMutationList} />
+            <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} blockUid=${block.uid} onDropOnMutationList=${onDropOnMutationList} onDropLibraryBlock=${onDropLibraryBlock} />
             ${block.error ? html`<p class="recipe-block__error">⚠ ${block.error}</p>` : null}
             ${block.resultSummary
               ? isExpandableSummary

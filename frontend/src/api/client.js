@@ -123,6 +123,12 @@ export const api = {
     // { step?, penality?, threshold?, specified_models_used?, session_id? } -> { "(mut,...)": score }
     patternInZona: (payload) => request("POST", "/analysis/patterninzona", payload),
   },
+
+  ensembl: {
+    // { ensembl_id, session_id? } -> { session_id, status }. Does not return
+    // the sequence text itself -- follow up with GET /get/sequence(session_id).
+    get: (payload) => request("POST", "/ensembl/get", payload),
+  },
 };
 
 // Row/column order of the 4x4 mutation probability matrix, per

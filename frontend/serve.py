@@ -31,6 +31,7 @@ API_PREFIXES = (
     "/altbypattern/",
     "/mutateindependently",
     "/analysis/",
+    "/ensembl/",
     "/docs",
     "/openapi.json",
     "/redoc",

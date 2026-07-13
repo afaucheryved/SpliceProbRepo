@@ -4,6 +4,7 @@
 // what a popover should show, and how oversized bar series get compressed
 // before they ever reach the canvas. Chart.js's own instance/canvas/zoom
 // concerns stay out of this file.
+import { getTheme, seriesColors } from "./theme.js";
 
 // Two adjacent bars can sit close enough on screen that Chart.js's own
 // nearest-index hit test picks whichever one the pointer happens to be a
@@ -188,7 +189,7 @@ export function aggregateBarSeries({ labels, datasets, threshold = AGGREGATION_T
     newDatasets.push({
       ...ds,
       data: compressedData[di],
-      backgroundColor: "#6b7280",
+      backgroundColor: seriesColors(getTheme()).compressedBar,
       borderColor: undefined,
       borderWidth: 0,
       barThickness: COMPRESSED_BAR_PX,

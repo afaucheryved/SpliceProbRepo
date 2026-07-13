@@ -3,6 +3,7 @@ import ChartJS from "https://esm.sh/chart.js@4.4.4/auto";
 import zoomPlugin from "https://esm.sh/chartjs-plugin-zoom@2?deps=chart.js@4.4.4";
 import { Popover } from "./Popover.js";
 import { resolveNearestBarIndex, buildPositionValueMap, buildPopoverScores, computeYAxisExtent, aggregateBarSeries } from "../../lib/chartLogic.js";
+import { getTheme, seriesColors } from "../../lib/theme.js";
 
 // Draws a persistent vertical line at the last-clicked data position (item
 // 7a). Reads its target off `chart.$verticalMarkerPosition` (a label value,
@@ -22,7 +23,7 @@ const verticalMarkerPlugin = {
     const x = xScale.getPixelForValue(idx);
     const ctx = chart.ctx;
     ctx.save();
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.85)";
+    ctx.strokeStyle = seriesColors(getTheme()).markerLine;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
@@ -64,6 +65,14 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
     () => (companionDatasets || []).map((c) => ({ label: c.label, map: buildPositionValueMap(c.positions, c.values) })),
     [companionDatasets]
   );
+  // Read by the click handler closure below -- kept out of the chart-creation
+  // effect's dependency array (companionDatasets is a fresh array literal on
+  // every caller render) so a new companion series doesn't force a full
+  // Chart.js teardown/rebuild; the ref keeps the closure's read fresh instead.
+  const companionMapsRef = useRef(companionMaps);
+  useEffect(() => {
+    companionMapsRef.current = companionMaps;
+  }, [companionMaps]);
 
   // Shapes raw labels/datasets into whatever actually gets handed to
   // Chart.js (bar aggregation + y-axis extent). aggregateBarSeries already
@@ -128,7 +137,7 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
         const position = typeof rawLabel === "number" ? rawLabel : Number(rawLabel);
         if (!position || position < 1) return;
 
-        const scores = buildPopoverScores({ chartDatasets: chart.data.datasets, index, companionSeries: companionMaps, position });
+        const scores = buildPopoverScores({ chartDatasets: chart.data.datasets, index, companionSeries: companionMapsRef.current, position });
 
         const rect = chart.canvas.getBoundingClientRect();
         const meta = chart.getDatasetMeta(el.datasetIndex);
@@ -159,12 +168,16 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-    // Intentionally depends on type + sequence + companionDatasets + the
-    // *reference* of options (not deep-compare) -- these change together
-    // exactly when OutputPanel hands the chart a fresh result, which is when
-    // the click handler's closed-over data needs to be fresh too.
+    // Intentionally depends on type + sequence + the *reference* of options
+    // (not deep-compare) -- these change together exactly when OutputPanel
+    // hands the chart a fresh result, which is when the click handler's
+    // closed-over data needs to be fresh too. companionDatasets is
+    // deliberately excluded (see companionMapsRef above) -- callers pass a
+    // fresh array literal every render, and depending on it here would tear
+    // down and rebuild the Chart.js instance (losing zoom/pan state) on
+    // essentially every re-render of the parent.
     // eslint-disable-next-line
-  }, [type, sequence, companionDatasets]);
+  }, [type, sequence]);
 
   useEffect(() => {
     const chart = chartRef.current;

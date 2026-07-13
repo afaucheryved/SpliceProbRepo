@@ -71,6 +71,12 @@ const PALETTE = {
     deltaNegative: "#ef4444",
     zonePale: "#bbf7d0",
     matchPale: "#fecaca",
+    // Aggregated/compressed placeholder bar (item 7b) and the persistent
+    // click marker line (item 7a) -- markerLine mirrors base.css's
+    // `--app-accent` for this theme so it reads as the same accent color as
+    // the rest of the UI.
+    compressedBar: "#6b7280",
+    markerLine: "rgba(99, 102, 241, 0.85)",
   },
   light: {
     acceptor: "#2563eb",
@@ -84,6 +90,8 @@ const PALETTE = {
     deltaNegative: "#f87171",
     zonePale: "#86efac",
     matchPale: "#fca5a5",
+    compressedBar: "#9ca3af",
+    markerLine: "rgba(79, 70, 229, 0.85)",
   },
 };
 

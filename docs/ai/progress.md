@@ -117,7 +117,9 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Judge verdict (2026-07-10): `[DONE]`.** Verified the `chartjs-plugin-zoom@2` esm.sh URL resolves (HTTP 200, real ESM module, correct default export) — confirmed via live `curl` in this sandbox. Reviewed the plugins-merge to confirm `ManhattanChart`'s existing `legend` option survives. Static analysis only for the actual zoom/pan/drag-select *interaction* — no browser available in this sandbox to click-test it; flagging for a human check same as Tasks 9/10.
 
-  **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/styles/base.css`.
+  **Superseded (2026-07-14, Pipeline view UX overhaul):** the human click-test flagged above surfaced that plain-wheel zoom fought normal page scrolling and the pan slider was hard to use. Redesigned: wheel-zoom now requires **Ctrl** (plain wheel scrolls the page), drag-to-select zoom and the pan slider were removed in favor of a static "Ctrl + scroll to zoom" hint plus click-drag panning, and the `+`/`-`/reset buttons were kept. See `docs/ai/architecture.md` §9.2 (`Chart.js`) for the current behavior.
+
+  **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/lib/chartLogic.js`, `frontend/src/styles/base.css`.
 
 - [x] **Task 14 — "Tracked Alterations" block: expandable per-entry summary**
 

@@ -22,6 +22,12 @@ No build step: plain ES modules, Preact + [`htm`](https://github.com/developit/h
 and Chart.js loaded from a CDN (`esm.sh`) at runtime. There is no
 `package.json` / `node_modules` to install.
 
+A dark/light theme toggle lives in the app header; the choice persists to
+`localStorage` and is applied via a `data-theme` attribute on `<html>`, with
+colors resolved through CSS custom properties (`src/styles/base.css`) and,
+for the handful of colors Chart.js needs as literal strings (canvas series
+fills), a small JS-side palette in `src/lib/theme.js`.
+
 ## Why `serve.py` exists
 
 The FastAPI backend (`app/main.py`) registers no CORS middleware, and this
@@ -65,6 +71,11 @@ Documented in `src/lib/workspace.js`, but worth repeating:
   structural alteration endpoints persist changes. Point-mutation scoring
   blocks/panels are therefore "probes": they read the current session state
   but don't change what later operations see.
+- `POST /ensembl/get` with an *existing* `session_id` silently no-ops — it
+  returns a success status but does not update that session's sequence. The
+  Ensembl ID field in `SessionBar` always fetches into a throwaway session
+  (see `fetchEnsemblSequence` in `workspace.js`) and only fills the draft
+  textarea for review, the same way "Upload FASTA…" does.
 
 ## Project layout
 
@@ -79,7 +90,9 @@ frontend/
       preact.js              # pinned Preact + htm CDN imports
       sequence.js             # validation, mutation parsing, diffing, CSV/export helpers
       workspace.js             # shared reactive session/sequence store (all 3 views read/write it)
-    components/shared/       # SegmentedControl, SequenceTrack, Chart, Feedback, SessionBar
+      theme.js                 # dark/light theme store + Chart.js literal-color palette
+      chartLogic.js            # Chart click-resolution, popover assembly, bar aggregation (no rendering)
+    components/shared/       # SegmentedControl, SequenceTrack, Chart, Popover, Feedback, SessionBar
     views/
       pipeline/                # Proposal 1
       dashboard/                # Proposal 2

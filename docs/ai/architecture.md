@@ -224,9 +224,11 @@ touching the frontend should plan around:
   do that if the environment has one; if not, say so explicitly rather than
   claiming the UI works.
 - **Read this section instead of re-exploring the tree.** Every file below
-  was read in full at least once while writing this section (2026-07-09).
-  Re-reading them all from scratch each session (as several past Worker/
-  Judge sessions have done) is pure wasted tool calls — trust this map,
+  was read in full at least once while writing this section (2026-07-09;
+  the Chart.js/chartLogic.js/theme.js/SessionBar.js/Pipeline-column
+  subsections were re-verified against the 2026-07-14 UX overhaul). Re-
+  reading them all from scratch each session (as several past Worker/Judge
+  sessions have done) is pure wasted tool calls — trust this map,
   spot-check only the specific file(s) your task touches.
 
 #### 9.1 Directory map
@@ -245,9 +247,12 @@ frontend/
     ├── lib/
     │   ├── preact.js               # re-exports Preact + htm from esm.sh (single import point)
     │   ├── sequence.js             # pure helpers: validation, diffing, label parsing (see 9.3)
-    │   └── workspace.js            # shared reactive session store, used by all 3 views (see 9.4)
+    │   ├── workspace.js            # shared reactive session store, used by all 3 views (see 9.4)
+    │   ├── theme.js                # dark/light theme store + Chart.js literal-color palette (see 9.2)
+    │   └── chartLogic.js           # Chart click-resolution/popover/bar-aggregation logic, no rendering (see 9.2)
     ├── components/shared/          # used across 2+ of the 3 proposals — see 9.2
     │   ├── Chart.js                 # Chart.js wrapper — HIGH TRAFFIC, see 9.2
+    │   ├── Popover.js               # chart click-popup (position, scores, sequence context)
     │   ├── SessionBar.js            # sequence loader / session indicator
     │   ├── SequenceTrack.js         # monospace diff-highlighted sequence viewer
     │   ├── Feedback.js              # ErrorBanner, Spinner, StatTile, Badge
@@ -289,21 +294,47 @@ everything downstream; before editing, grep for every call site and check
 file (several planned tasks explicitly overlap here — see the file itself).
 
 - **`Chart.js`** — thin Chart.js wrapper (`type`, `labels`, `datasets`,
-  `options` props). As of 2026-07-09 it has **no interactivity** — no click
-  handling, no zoom/pan plugin, no region annotation. Called from
-  `OutputPanel.js` (×3: `ProbaOutput`, `ProbaHistoryOutput`, `DeltaOutput`),
-  `GenomeTrack.js`, `DetailChart.js`, `ManhattanChart.js`. Multiple backlog
-  tasks (peak-click popup, zoom controls, pattern-match region shading) all
-  extend this same file — expect to need a Chart.js plugin (e.g.
-  `chartjs-plugin-zoom`, `chartjs-plugin-annotation`) registered once,
-  shared correctly across every one of those call sites, not per-call-site
-  reimplementations.
+  `options`, `sequence`, `companionDatasets` props). Owns only the
+  `<canvas>`/Chart.js instance lifecycle and drawing; click-resolution,
+  popover-content assembly, bar aggregation and y-axis extents are pure
+  functions in `lib/chartLogic.js` (split out so that logic is
+  chart.js-agnostic and independently reasoned-about — see that file's
+  header comment for the rationale), only *called* from here. Called from
+  `OutputPanel.js` (×3+: `ProbaOutput` now renders two charts, acceptor and
+  donor, linked via `companionDatasets` so a click on either shows both
+  scores; `ProbaHistoryOutput`, `DeltaOutput`), `GenomeTrack.js`,
+  `DetailChart.js`, `ManhattanChart.js`. Current interactivity: clicking a
+  data point (when a `sequence` prop is supplied) opens a `Popover.js`
+  showing position/scores/±10bp sequence context and drops a persistent
+  vertical marker line until the popup is closed or a new point is
+  clicked; `chartjs-plugin-zoom` is registered once at module scope
+  (wheel-zoom requires **Ctrl** — plain wheel is left free for page scroll
+  — plus click-drag panning and `+`/`-`/reset toolbar buttons; there is no
+  drag-to-zoom and no pan-range slider). Bar charts above 500 points are
+  downsampled by `chartLogic.js`'s `aggregateBarSeries()` (keeps the 150
+  largest-magnitude bars full width, collapses intervening runs into a
+  thin placeholder bar at that run's own peak) and use
+  `resolveNearestBarIndex()` to resolve a click near a short/tall bar
+  boundary to the taller bar. Y-axis `max`/`min` are set from the actual
+  data extremes (`computeYAxisExtent()`) instead of Chart.js's default
+  auto-padding. Series colors for canvas fills (not CSS-themeable) come
+  from `lib/theme.js`'s `seriesColors()`. Any further backlog task
+  extending clicking/zoom/annotation behavior should land in
+  `chartLogic.js` if it's data/logic, or `Chart.js` only for
+  rendering/plugin wiring — shared correctly across every call site above,
+  not per-call-site reimplementations.
 - **`SessionBar.js`** — sequence loader + session indicator, rendered with
-  different CSS framing (`compact` prop) in all three proposals. As of
-  2026-07-09 (Task 5/6) it has two distinct actions: "Load sequence"
-  (changes the *current* session's base sequence in place, disabled with no
-  active session) and "Start new session" (always mints a fresh
-  `session_id`) — see 9.4 for the backend calls behind each.
+  different CSS framing (`compact` prop) in all three proposals. It has
+  three distinct actions: "Load sequence" (changes the *current* session's
+  base sequence in place, disabled with no active session), "Start new
+  session" (always mints a fresh `session_id`), and "Upload FASTA…" / an
+  "Ensembl ID…" field + "Fetch Ensembl" button, both of which only *fill
+  the draft textarea* for review — nothing is sent to the backend until
+  "Load sequence" or "Start new session" is clicked afterward. The Ensembl
+  fetch deliberately requests a **throwaway session** (never the active
+  `session_id`) because `POST /ensembl/get` silently no-ops on an existing
+  `session_id` — see 9.4 point 6 and root `AGENTS.md`. See 9.4 for the
+  backend calls behind each action.
 - **`SequenceTrack.js`** — monospace FASTA-style viewer, 60 bases/row, a
   position gutter, and per-base diff highlighting against an optional
   `reference` sequence (hover title shows `position N: ref→base`). Also
@@ -311,13 +342,25 @@ file (several planned tasks explicitly overlap here — see the file itself).
   and, since Task 8, an `operations` Map (0-based position → operation
   summary string, appended to the hover title) used by Pipeline's
   `SequenceOutput`.
-- **`Feedback.js`** — `ErrorBanner`, `Spinner`, `StatTile`, `Badge`. No
-  modal/popover exists here as of 2026-07-09 — a planned task (peak-click
-  popup) needs to add one.
+- **`Popover.js`** — the chart click-popup (position, per-dataset scores,
+  ±10bp sequence context). Positioned via coordinates the caller computes
+  relative to the chart canvas's own bounding rect (not the viewport),
+  since it renders `position: absolute` inside a `position: relative`
+  ancestor.
+- **`Feedback.js`** — `ErrorBanner`, `Spinner`, `StatTile`, `Badge`.
 - **`SegmentedControl.js`** — generic N-way toggle; takes an `ariaLabel`
   prop (default `"Frontend proposal"` for the top-level 3-way switch) so a
   second instance (Compare's Data Source toggle) can self-identify to
   screen readers correctly.
+- **`lib/theme.js`** — hand-rolled reactive store mirroring `workspace.js`'s
+  pattern (module-level value + listener `Set` + a `useTheme()` hook);
+  persists `"dark"|"light"` to `localStorage` and applies it via
+  `data-theme` on `<html>`. Most colors are themed through CSS custom
+  properties in `styles/base.css`; this module additionally exposes
+  `seriesColors()`, a JS-side mirror of a few of those same colors for the
+  one place CSS variables can't reach — literal color strings handed to
+  Chart.js for canvas fills. Keep the two palettes in sync by eye when
+  either changes.
 
 #### 9.3 `frontend/src/lib/sequence.js` — pure helper functions
 
@@ -351,6 +394,7 @@ errors into `lastError`):**
 | `initSession(sequence, name?)` | `POST /resetgv`, `session_id: null` | Always mints a **new** session; resets all client state. |
 | `loadSequenceIntoSession(sequence, name?)` | `POST /resetgv`, existing `session_id` + non-empty `sequence` | In-place: changes `base_sequence`, clears tracked history, **same** `session_id`. (Task 5/6.) |
 | `resetSession()` | `POST /resetgv`, existing `session_id` + **unchanged** `sequence` | Clears tracked history only, `base_sequence` untouched. Used by Pipeline's `bake()` before re-running alteration blocks (Task 7). |
+| `fetchEnsemblSequence(ensemblId)` | `POST /ensembl/get` with `session_id: null`, then `GET /get/sequence` on the returned session | Read-only from the caller's perspective — mints and discards a throwaway session purely to read back the fetched sequence text; does not touch the active session. See quirk 6 below for why. |
 | `refreshAlteredSequence()` / `runAlteration(label, apiCall)` | `GET /get/alteredsequence` | Structural alteration endpoints return `null` by design (no `return` in the route handler) — this is the **only** way to observe their effect. |
 | `scoreSimple(mutations)` / `scoreDelta(mutations)` | `POST /GetSimpleProb/` / `POST /GetDeltaScore/` | **Read-only probe** — mutations are applied transiently in-memory server-side, never written back to the session. Does not chain into structural operations. |
 | `fetchAllSimpleProbas()` | `GET /get/allsimpleprobas` | Read-only. |
@@ -377,6 +421,11 @@ actual router code, not assumed):**
    payload as of Task 5 — see the method table above; don't assume
    "existing `session_id`" always means "reconnect without change" the way
    it did before Task 5.
+6. `POST /ensembl/get` with an *existing* `session_id` returns a success
+   status but does **not** actually update that session's stored sequence —
+   a follow-up `GET /get/sequence` for the same session still returns the
+   old text. `fetchEnsemblSequence()` always omits `session_id` (mints a
+   throwaway one) to get the fetched sequence back; see root `AGENTS.md`.
 
 #### 9.5 The Pipeline's block/recipe pattern
 
@@ -392,6 +441,23 @@ a block never requires touching `BlockForm.js`), `outputKind` (drives which
 `workspace`). `AlterationToolbox.js` (Workbench) reuses this exact same
 array for its single-shot operation picker — a block definition change
 affects both proposals at once.
+
+Dragging a block onto a Scoring block's mutation-list field works from two
+different sources, both handled in `PipelineView.js`: dragging an
+already-baked recipe block (`handleDropOnMutationList`) diffs its captured
+before/after sequence into point mutations and appends them directly;
+dragging a block straight out of the library (`handleDropLibraryBlockOnMutationList`,
+never baked yet, so it has no diff to translate) instead adds it to the
+recipe just before the target and returns an inline message telling the
+user to Bake, then drag it again — now from the recipe stack, not the
+library — to actually append its mutations.
+
+The three Pipeline columns (library/recipe/output) have draggable
+`col-resize` boundaries (`pipeline-view__resize-handle`, driven by
+`libraryWidth`/`recipeWidth` state in `PipelineView.js`); each floor
+(`MIN_LIBRARY_WIDTH`/`MIN_RECIPE_WIDTH`/`MIN_OUTPUT_WIDTH`) matches the
+column's old fixed width, so resizing can never squeeze a column away
+entirely.
 
 ## Key Design Patterns
 - **Factory Pattern**: `create_internal_variant()` in `internal_gv_factory.py`

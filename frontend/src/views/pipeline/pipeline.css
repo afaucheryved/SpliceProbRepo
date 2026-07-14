@@ -1,0 +1,385 @@
+.pipeline-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem 1.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.pipeline-view__session {
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.pipeline-view__columns {
+  display: grid;
+  /* grid-template-columns is set inline (item 6) -- driven by draggable
+     column-boundary state in PipelineView.js. `gap` still applies on both
+     sides of the resize-handle columns, giving the handle some breathing
+     room instead of butting directly against the panels. */
+  gap: 0.4rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Draggable boundary between two columns (item 6). A thin visible rule that
+   thickens/accents on hover so it reads as grabbable; col-resize signals the
+   drag direction. */
+.pipeline-view__resize-handle {
+  cursor: col-resize;
+  position: relative;
+  min-height: 0;
+}
+
+.pipeline-view__resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--app-border);
+  transition: background 0.1s ease;
+}
+
+.pipeline-view__resize-handle:hover::after,
+.pipeline-view__resize-handle:active::after {
+  background: var(--app-accent);
+}
+
+.pipeline-view__library,
+.pipeline-view__recipe {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pipeline-view__output-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+}
+
+.pipeline-view__output {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Block library ---- */
+
+.block-library__category {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  margin: 0.6rem 0 0.3rem;
+}
+
+.block-library__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.35rem;
+  cursor: grab;
+  font-size: 0.78rem;
+  transition: border-color 0.1s ease;
+}
+
+.block-library__item:hover {
+  border-color: var(--app-accent);
+}
+
+.block-library__add {
+  color: var(--app-accent);
+  font-weight: 700;
+}
+
+/* ---- Recipe stack ---- */
+
+.recipe-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+}
+
+.recipe-stack__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--app-border);
+  border-radius: 8px;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* Fills the remaining empty space below the last recipe block down to the
+   bottom of the scrollable stack, rather than sitting as a thin strip
+   (item 2) -- flex:1 as the stack's trailing flex item. */
+.recipe-stack__tail {
+  flex: 1;
+  min-height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--app-border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.recipe-block {
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  cursor: default;
+}
+
+.recipe-block--disabled {
+  opacity: 0.5;
+}
+
+.recipe-block--drop-target {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+}
+
+/* Precise "insert here" gap indicator (Task 12), supplementing the
+   whole-block highlight above. Collapsed to ~0 height until a drag is
+   hovering directly over the block that follows it. */
+.recipe-gap {
+  height: 0;
+  margin: 0;
+  border-radius: 999px;
+  background: transparent;
+  transition: height 0.08s ease, background 0.08s ease;
+}
+
+.recipe-gap--active {
+  height: 4px;
+  margin: -2px 0;
+  background: var(--app-accent);
+}
+
+.recipe-block__header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.recipe-block__handle {
+  cursor: grab;
+  color: var(--text-subtle);
+}
+
+.recipe-block__collapse {
+  background: none;
+  border: none;
+  color: var(--text-subtle);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 0.15rem;
+  line-height: 1;
+}
+
+.recipe-block__collapse:hover {
+  color: var(--app-fg);
+}
+
+.recipe-block__title {
+  font-weight: 700;
+  font-size: 0.82rem;
+  flex: 1;
+}
+
+.recipe-block__category {
+  font-size: 0.65rem;
+  color: var(--text-subtle);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+
+.recipe-block__category--scoring {
+  color: var(--category-scoring);
+  border-color: var(--category-scoring);
+}
+
+.recipe-block__category--analysis {
+  color: var(--category-analysis);
+  border-color: var(--category-analysis);
+}
+
+.block-library__item--scoring {
+  border-left: 3px solid var(--category-scoring);
+}
+
+.block-library__item--analysis {
+  border-left: 3px solid var(--category-analysis);
+}
+
+.recipe-block__toggle {
+  margin: 0;
+}
+
+.recipe-block__summary {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0.3rem 0 0.5rem;
+}
+
+.recipe-block__status--success { color: var(--success); }
+.recipe-block__status--error { color: var(--danger); }
+.recipe-block__status--running { color: var(--app-accent); }
+
+.recipe-block__error {
+  color: var(--danger-light);
+  font-size: 0.72rem;
+}
+
+.recipe-block__result {
+  color: var(--success-light);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+
+.recipe-block__result--expandable {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.recipe-block__result--expandable:hover {
+  text-decoration: underline;
+}
+
+.recipe-block__tracked-list {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.recipe-block__tracked-list li {
+  padding: 0.05rem 0;
+}
+
+.block-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-hint {
+  font-size: 0.68rem;
+  color: var(--text-subtle);
+  margin: 0.2rem 0;
+}
+
+/* Plain text/number/select inputs in a recipe block's form — reduced to
+   ~1/3 width. Matrix/mutation-list fields keep their own dedicated widths
+   (they don't carry the .field__control class). */
+.recipe-block .field__control {
+  width: 33%;
+  min-width: 3.5rem;
+  align-self: flex-start;
+}
+
+.mutation-list__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.mutation-list__prefix {
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
+  font-size: 0.75rem;
+}
+
+.mutation-list__pos {
+  width: 4.5rem;
+}
+
+.mutation-list--drop-target {
+  outline: 2px dashed var(--app-accent, #6366f1);
+  outline-offset: 2px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.matrix-field {
+  border-collapse: collapse;
+}
+
+.matrix-field th,
+.matrix-field td {
+  padding: 0.15rem 0.3rem;
+  text-align: center;
+}
+
+.matrix-field__row--invalid td {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.matrix-field input {
+  width: 3.6rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.checkbox-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  width: auto;
+}
+
+.output-panel__hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.output-panel__history-entry {
+  border-top: 1px solid var(--app-border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.output-panel__history-entry:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.output-panel__history-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0 0 0.3rem;
+}

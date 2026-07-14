@@ -7,6 +7,7 @@ from app.router.simple_router import router as simple_router
 from app.router.alteration_byindex_router import router as alteration_byindex_router
 from app.router.alteration_bypattern_router import router as alteration_bypattern_router
 from app.router.analysis_router import router as analysis_router
+from app.router.alteration_radom import router as alteration_radom_router
 from app.router.get_router import router as get_router
 from app.router.resetgv_router import router as resetgv_router
 
@@ -28,5 +29,6 @@ app.include_router(alteration_byindex_router,
                    prefix="/altbyindex")
 app.include_router(alteration_bypattern_router,
                    prefix="/altbypattern")
+app.include_router(alteration_radom_router)
 app.include_router(analysis_router,
                    prefix="/analysis")

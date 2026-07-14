@@ -1,8 +1,7 @@
-1% : [[450, 500], [600, 750], [1050, 1150], [1150, 1300]]
-1% : [[450, 550], [1050, 1250]]
-5  : []
 
-//reste: 
+
+// body request for test of the following endoint: /resetgv : 
+
 {
   "name": "string",
   "mutations": [

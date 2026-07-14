@@ -4,7 +4,7 @@ import traceback
 from pydantic import BaseModel
 
 #local importation
-from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
+from app.domain.internal_gv_factory import create_internal_variant
 from app.schemas.typing import *
 
 router = APIRouter()
@@ -12,15 +12,28 @@ router = APIRouter()
 # one BaseModel for each alteration function
 
 class MutateIndependentlyParameters(BaseModel):
-    prob_mat: MutationMatrix = [[1, 0, 0, 0], 
-                                [0, 1, 0, 0], 
-                                [0, 0, 1, 0], 
+    # `MutationMatrix` (app/schemas/typing.py) is a bare numpy NDArray type
+    # alias; Pydantic v2 cannot build a validation schema for it and raising
+    # PydanticSchemaGenerationError at import time, crashing the whole app.
+    # The domain layer (RandomAlterationFunctions.proba_law) only ever does
+    # list indexing / iterates it as weights, so a plain nested list is a
+    # drop-in replacement with an identical JSON wire format.
+    prob_mat: list[list[float]] = [[1, 0, 0, 0],
+                                [0, 1, 0, 0],
+                                [0, 0, 1, 0],
                                 [0, 0, 0, 1]]
     simulated_phenomenon: str | None = None # specific phenomenon to implement by the future simulkated by a specific method or matrix ?
+    # Optional session identifier for multi‑user isolation.
+    session_id: str | None = None
 
 @router.post("/mutateindependently")
 async def mutate_independentely(p: MutateIndependentlyParameters):
     try:
-        my_internal_genetic_variant.mutate_independently(prob_mat=p.prob_mat)
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=p.session_id,
+        )
+        gv.mutate_independently(prob_mat=p.prob_mat)
     except Exception as e:
-        raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
+        raise Exception(f"fail to get sequence of the current 'internal genetic variant' : {e}")

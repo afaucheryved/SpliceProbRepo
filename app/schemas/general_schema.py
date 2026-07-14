@@ -14,6 +14,9 @@ class GeneticVariant(BaseModel): # switch to using InternalGeneticVariant for th
     mutations: list[str] = [""]
     sequence: str = ""
     altered_sequence: str = ""
+    # Optional session identifier for multi‑user isolation. If omitted a new
+    # UUID will be generated on the first request that requires a session.
+    session_id: str | None = None
 
     @field_validator('sequence')
     @classmethod

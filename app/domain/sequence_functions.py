@@ -9,8 +9,9 @@ import random
 from app.schemas.typing import *
 from app.domain.spliceai_calculation import tuple_mutation
 from app.test.global_var import GlobalVar
+from app.domain.mixins import AlteredSequenceTrackerMixin
 
-class AlterationFunctionsByIndex:
+class AlterationFunctionsByIndex(AlteredSequenceTrackerMixin):
 
     """
     This class provides functions that operate on ATCG sequences by index.
@@ -55,6 +56,8 @@ class AlterationFunctionsByIndex:
 
         if no_return:
             self.altered_sequence = new_sequence
+            # Track the insertion mutation
+            self._track_alteration(f"insert:{pattern}@{index}")
         else:
             return new_sequence
             
@@ -86,8 +89,12 @@ class AlterationFunctionsByIndex:
             end0 = len(self.altered_sequence)
         else:
             end0 = end  # inclusive 1-based end == exclusive 0-based end
-        if no_return: self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
-        else: return self.altered_sequence[:start0] + self.altered_sequence[end0:]
+        if no_return:
+            self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
+            # Track the deletion mutation (simple start index label)
+            self._track_alteration(f"delete:{start}")
+        else:
+            return self.altered_sequence[:start0] + self.altered_sequence[end0:]
 
     def move(self, 
                      start_cc: int,
@@ -111,16 +118,44 @@ class AlterationFunctionsByIndex:
         start0 = start_cc - 1   # convert to 0-based
         end0 = end_cc            # inclusive 1-based end == exclusive 0-based end
 
-        pattern = self.sequence[start0:end0]
-        new_sequence = AlterationFunctionsByIndex.delete_by_index(self, start_cc, end_cc)
+        # Extract the pattern from the CURRENT altered_sequence (not the original)
+        pattern = self.altered_sequence[start0:end0]
+
+        # Delete the cut region directly from altered_sequence
+        cut_length = end0 - start0
+        self.altered_sequence = self.altered_sequence[:start0] + self.altered_sequence[end0:]
 
         # Adjusts index_paste if the paste point was located after the deleted area.
-        cut_length = end0 - start0
         if index_paste > start_cc:
             index_paste -= cut_length
 
-        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+        # Determine the replacement length for the insert step.
+        if length_paste == "default" or length_paste == 0 or length_paste == ":":
+            replace_length = len(pattern)
+        elif length_paste == "all":
+            replace_length = len(self.altered_sequence)
+        else:
+            replace_length = length_paste
+
+        idx0 = index_paste - 1  # convert to 0-based
+
+        if no_return:
+            self.altered_sequence = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the move mutation (single entry, no double-tracking)
+            self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
+        else:
+            result = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the move mutation (single entry, no double-tracking)
+            self._track_alteration(f"move:{start_cc}-{end_cc}->@{index_paste}")
+            return result
 
     def copy_past(self, 
                      start_cc: int,
@@ -143,11 +178,38 @@ class AlterationFunctionsByIndex:
         start0 = start_cc - 1
         end0 = end_cc
 
-        pattern = self.sequence[start0:end0]
-        if no_return: AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=True)
-        else: return AlterationFunctionsByIndex.insert(self, pattern, index_paste, length_paste, no_return=False)
+        # Extract the pattern from the CURRENT altered_sequence (not the original)
+        pattern = self.altered_sequence[start0:end0]
 
-class AlterationFunctionsByPattern:
+        # Determine the replacement length for the insert step.
+        if length_paste == "default" or length_paste == 0 or length_paste == ":":
+            replace_length = len(pattern)
+        elif length_paste == "all":
+            replace_length = len(self.altered_sequence)
+        else:
+            replace_length = length_paste
+
+        idx0 = index_paste - 1  # convert to 0-based
+
+        if no_return:
+            self.altered_sequence = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the copy‑paste mutation (single entry, no double-tracking)
+            self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
+        else:
+            result = (
+                self.altered_sequence[:idx0]
+                + pattern
+                + self.altered_sequence[idx0 + replace_length:]
+            )
+            # Track the copy‑paste mutation (single entry, no double-tracking)
+            self._track_alteration(f"copy_paste:{start_cc}-{end_cc}@{index_paste}")
+            return result
+
+class AlterationFunctionsByPattern(AlteredSequenceTrackerMixin):
 
     """
     This class provides functions that operate on ATCG sequences.
@@ -192,46 +254,101 @@ class AlterationFunctionsByPattern:
 
         return "".join(regex_parts)
 
-    def replace(self, 
-                            old: str, 
-                            new: str, 
-                            no_return: bool = True)-> genome | NoReturn:
+    def _track_pattern_match_variants(self, label_prefix: str, base_sequence: str, matches: list, build_variant) -> None:
+        """Track one additional entry per pattern match (Task 17).
+
+        Each variant reflects only *one* match changed, with every other
+        match left exactly as in ``base_sequence`` (the sequence state right
+        before this operation ran). These are purely additional entries for
+        tracking/scoring visibility -- they never change ``self.altered_sequence``,
+        which stays the single all-matches-applied result the rest of the
+        pipeline chains onto.
+
+        Args:
+            label_prefix: e.g. ``"replace:aaa->ccc"`` or
+                ``"delete_by_pattern:aaa"`` -- gets ``[match i/n]@start``
+                appended per variant.
+            base_sequence: the sequence state before this operation (matches
+                are enumerated against this, not the final result).
+            matches: non-overlapping ``re.Match`` objects from
+                ``re.finditer`` on ``base_sequence``.
+            build_variant: ``(match) -> str`` builds the single-match-only
+                variant sequence for one match.
         """
-        Replace one nucleotide pattern with another.
-        ! -> "_" is a wildcard character (matches exactly one ATCG base).
-        ! -> "%(n)" is a wildcard character (matches any sequence of up to 'n' ATCG bases).
-        Example:
+        n = len(matches)
+        if n < 2:
+            # A single match is already fully represented by the main
+            # tracked entry above -- no need for a redundant duplicate.
+            return
+        saved_altered_sequence = self.altered_sequence
+        try:
+            for i, match in enumerate(matches, start=1):
+                self.altered_sequence = build_variant(match)
+                self._track_alteration(
+                    f"{label_prefix}[match {i}/{n}]@{match.start() + 1}",
+                    match_start=match.start(),
+                    match_end=max(match.start(), match.end() - 1),
+                )
+        finally:
+            self.altered_sequence = saved_altered_sequence
+            # Each variant's _track_alteration call above persisted its own
+            # (one-off) sequence as the session's "current_altered_sequence"
+            # in Redis -- restore it to the real chain-forward value now
+            # that self.altered_sequence is back to normal.
+            self._resync_current_altered_sequence()
 
-            old = "cc_c", new = "aaaa"
-                               REPLACE                  REPLACE
-            -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
-                                |--|                       |--|
-                                aaaa                       aaaa
-                                
+    def replace(self,
+                old: str,
+                new: str,
+                no_return: bool = True) -> genome | NoReturn:
+        """Replace one nucleotide pattern with another.
 
+        ``_`` matches exactly one ATCG base.
+        ``%(n)`` matches any sequence of up to ``n`` ATCG bases.
         """
         self.there_is_change = True
-        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(old)
-        if no_return: self.altered_sequence = re.sub(regex_pattern, new, self.sequence)
-        else: return re.sub(regex_pattern, new, self.sequence)
+        regex_pattern = self._pattern_to_regex(old)
+        if no_return:
+            base_sequence = self.altered_sequence
+            matches = list(re.finditer(regex_pattern, base_sequence))
+            self.altered_sequence = re.sub(regex_pattern, new, base_sequence)
+            # Track the replace mutation
+            self._track_alteration(f"replace:{old}->{new}")
+            # Track one additional variant per match (Task 17).
+            self._track_pattern_match_variants(
+                f"replace:{old}->{new}",
+                base_sequence,
+                matches,
+                lambda m: base_sequence[: m.start()] + new + base_sequence[m.end():],
+            )
+        else:
+            return re.sub(regex_pattern, new, self.altered_sequence)
 
-    def delete_by_pattern(self, 
-                       pattern: str, 
-                       no_return: bool = True)-> genome:
-        """
-        ! -> "_" is a wildcard character (replaces 1 atcg base).
-        ! -> "%(n)" is a wildcard character (matches any sequence of up to 'n' ATCG bases).
-        Example:
+    def delete_by_pattern(self,
+                           pattern: str,
+                           no_return: bool = True) -> genome:
+        """Delete a pattern from the sequence.
 
-            pattern = "cc_c"
-                               DELETE                     DELETE
-            -> ...atcgatcgatcgatccccgatcgatcgatcgatcgatcgatcctcgatcgatcgatcgatcgatcg...
-                                |--|                       |--|                                                    
+        ``_`` matches exactly one ATCG base.
+        ``%(n)`` matches any sequence of up to ``n`` ATCG bases.
         """
         self.there_is_change = True
-        regex_pattern = AlterationFunctionsByPattern._pattern_to_regex(self, pattern)
-        if no_return: self.altered_sequence = re.sub(regex_pattern, "", self.sequence)
-        else : return re.sub(regex_pattern, "", self.sequence)
+        regex_pattern = self._pattern_to_regex(pattern)
+        if no_return:
+            base_sequence = self.altered_sequence
+            matches = list(re.finditer(regex_pattern, base_sequence))
+            self.altered_sequence = re.sub(regex_pattern, "", base_sequence)
+            # Track the delete‑by‑pattern mutation
+            self._track_alteration(f"delete_by_pattern:{pattern}")
+            # Track one additional variant per match (Task 17).
+            self._track_pattern_match_variants(
+                f"delete_by_pattern:{pattern}",
+                base_sequence,
+                matches,
+                lambda m: base_sequence[: m.start()] + base_sequence[m.end():],
+            )
+        else:
+            return re.sub(regex_pattern, "", self.altered_sequence)
 
 class SequenceFactory:
 
@@ -282,8 +399,10 @@ class RandomAlterationFunctions:
             If prob_mat[0][1] = 0.01 (A -> C), then calling proba_law("A", prob_mat)
             has a 1% chance of returning "C".
         """
-        # Find the row index corresponding to the input base
-        base_index = GlobalVar.BASES.index(base.upper())
+        # Find the row index corresponding to the input base. GlobalVar.BASES
+        # is lowercase ("acgt"); normalize both sides before searching so
+        # this doesn't raise "substring not found" for every call.
+        base_index = GlobalVar.BASES.upper().index(base.upper())
 
         # Get the probability distribution for this base (row of the matrix)
         probabilities = prob_mat[base_index]
@@ -307,11 +426,15 @@ class RandomAlterationFunctions:
         """
         self.there_is_change = True
         result = "".join(
-            RandomAlterationFunctions.proba_law(base, prob_mat)
+            self.proba_law(base, prob_mat)
             for base in self.sequence
         )
-        if no_return: self.altered_sequence = result
-        else: return result
+        if no_return:
+            self.altered_sequence = result
+            # Track the random mutation
+            self._track_alteration("mutate_independently")
+        else:
+            return result
 
 class WindowMutationFunctions:
 

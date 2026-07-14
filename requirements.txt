@@ -1,7 +1,8 @@
-﻿spliceai
-“fastapi[standard]”
-setuptools==69.5.1
-tensorflow
-ruptures
-matplotlib
-numpy==2.4.6
+﻿ spliceai
+ fastapi[standard]
+ setuptools==69.5.1
+ tensorflow
+ ruptures
+ matplotlib
+ numpy==2.4.6
+ redis

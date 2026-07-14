@@ -4,7 +4,8 @@ import traceback
 from pydantic import BaseModel
 
 #local importation
-from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
+# Import the factory to obtain a session‑aware InternalGeneticVariant instance.
+from app.domain.internal_gv_factory import create_internal_variant
 from app.schemas.typing import *
 
 router = APIRouter()
@@ -15,35 +16,45 @@ class DeletParameters(BaseModel):
     start: int = 0
     end: int | None = None
     length: int | None = None
+    # Optional session identifier for multi‑user isolation.
+    session_id: str | None = None
     
 class InsertParameters(BaseModel):
     pattern: str = ""
     index: int = 0
     length: int = 0
+    session_id: str | None = None
 
 class MoveParameters(BaseModel):
     start_cc: int = 0
     end_cc: int = 0
     index_paste: int = 0
-    length_past: int = 0
+    length_paste: int = 0
+    session_id: str | None = None
 
 class CopyPasteParameters(BaseModel):
     start_cc: int = 0
     end_cc: int = 0
     index_paste: int = 0
-    length_past: int = 0
+    length_paste: int = 0
+    session_id: str | None = None
 
 # one async post function for each alteration fucntion
 
+@router.post("/delete")
 @router.post("/delet")
 async def delet(p: DeletParameters):
     try:
-        if p.end is None and p.length is not None:
-            my_internal_genetic_variant.delete_by_index(start = p.start, end = p.end)
-            
-        elif p.end is not None and p.length is None:
-            my_internal_genetic_variant.delete_by_index(start = p.start, length = p.end)
-        
+        # Obtain a session‑aware variant instance.
+        gv = create_internal_variant(
+            sequence="",  # The base sequence will be fetched from the session if available.
+            mutations=[],
+            session_id=p.session_id,
+        )
+        if p.end is not None and p.length is None:
+            gv.delete_by_index(start=p.start, end=p.end)
+        elif p.end is None and p.length is not None:
+            gv.delete_by_index(start=p.start, length=p.length)
         else:
             raise ValueError("you cannot use both 'length' and 'end' parameters")
     except Exception as e:
@@ -52,20 +63,35 @@ async def delet(p: DeletParameters):
 @router.post("/insert")
 async def insert(p: InsertParameters):
     try:
-        my_internal_genetic_variant.insert(pattern=p.pattern, index=p.index, length=p.length) 
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=p.session_id,
+        )
+        gv.insert(pattern=p.pattern, index=p.index, length=p.length)
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
 @router.post("/move")
 async def move(p: MoveParameters):
     try:
-        my_internal_genetic_variant.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=p.session_id,
+        )
+        gv.move(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_paste)
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")
 
 @router.post("/copypast")
 async def coupy_past(p: CopyPasteParameters):
     try:
-        my_internal_genetic_variant.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_past)
+        gv = create_internal_variant(
+            sequence="",
+            mutations=[],
+            session_id=p.session_id,
+        )
+        gv.copy_past(start_cc=p.start_cc, end_cc=p.end_cc, index_paste=p.index_paste, length_paste=p.length_paste)
     except Exception as e:
         raise Exception(f"fail to get sequence of the curent 'internal genitic variant' : {e}")

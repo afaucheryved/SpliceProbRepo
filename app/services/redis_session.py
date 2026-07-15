@@ -64,15 +64,18 @@ def _namespaced_key(session_id: str, key: str) -> str:
     return f"session:{session_id}:{key}"
 
 
-def set_session_data(session_id: str, key: str, value: Any, ttl: int = 1800) -> None:
+def set_session_data(session_id: str, key: str, value: Any, ttl: int | None = None) -> None:
     """Store ``value`` under ``key`` for the given ``session_id``.
 
     The value is JSON‑encoded before storage. ``ttl`` (time‑to‑live) defaults to
-    30 minutes (1800 seconds) as requested.
+    ``None`` (no expiry).
     """
     client = _get_redis_client()
     namespaced = _namespaced_key(session_id, key)
-    client.set(namespaced, json.dumps(value), ex=ttl)
+    if ttl is not None:
+        client.set(namespaced, json.dumps(value), ex=ttl)
+    else:
+        client.set(namespaced, json.dumps(value))
 
 
 def get_session_data(session_id: str, key: str) -> Any:

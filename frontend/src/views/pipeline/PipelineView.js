@@ -46,8 +46,10 @@ export function PipelineView() {
   const [overIndex, setOverIndex] = useState(null);
   const [libraryWidth, setLibraryWidth] = useState(240);
   const [recipeWidth, setRecipeWidth] = useState(420);
+  const [outputWidth, setOutputWidth] = useState(360);
   const columnsRef = useRef(null);
   const resizeStateRef = useRef(null);
+  const cancelRef = useRef(false);
 
   function handleResizeMove(e) {
     const rs = resizeStateRef.current;
@@ -60,6 +62,9 @@ export function PipelineView() {
     } else if (rs.column === "recipe") {
       const maxRecipe = Math.max(MIN_RECIPE_WIDTH, rs.containerWidth - gaps - rs.startLibrary - MIN_OUTPUT_WIDTH);
       setRecipeWidth(Math.min(Math.max(MIN_RECIPE_WIDTH, rs.startRecipe + delta), maxRecipe));
+    } else if (rs.column === "output") {
+      const maxOutput = Math.max(MIN_OUTPUT_WIDTH, rs.containerWidth - gaps - rs.startLibrary - rs.startRecipe);
+      setOutputWidth(Math.min(Math.max(MIN_OUTPUT_WIDTH, rs.startOutput + delta), maxOutput));
     }
   }
 
@@ -76,6 +81,7 @@ export function PipelineView() {
       startX: e.clientX,
       startLibrary: libraryWidth,
       startRecipe: recipeWidth,
+      startOutput: outputWidth,
       containerWidth: columnsRef.current?.getBoundingClientRect().width ?? 0,
     };
     window.addEventListener("mousemove", handleResizeMove);
@@ -178,6 +184,7 @@ export function PipelineView() {
     if (!ws.sessionId) return;
     setRunning(true);
     setFinalResult(null);
+    cancelRef.current = false;
     setRecipe((r) => r.map((b) => ({ ...b, status: "idle", error: null, resultSummary: null })));
 
     // If any enabled block is an alteration-category block, reset the session
@@ -197,12 +204,10 @@ export function PipelineView() {
 
     let lastOutput = null;
     let stopped = false;
-    // Track the sequence state before each block runs, so alteration blocks
-    // can later be dragged onto a point-mutations block to translate their
-    // effect into explicit >p.<pos>.<ref>><alt> strings (Task 9).
     let runningSequence = ws.baseSequence;
+    const allResults = [];
     for (const block of recipe) {
-      if (stopped) {
+      if (cancelRef.current || stopped) {
         patchBlock(block.uid, { status: "skipped" });
         continue;
       }
@@ -232,7 +237,8 @@ export function PipelineView() {
             resultData: result,
           });
         }
-        lastOutput = { kind: def.outputKind, data: result };
+        lastOutput = { kind: def.outputKind, data: result, params: block.params };
+        allResults.push(lastOutput);
       } catch (err) {
         patchBlock(block.uid, { status: "error", error: err.message || String(err) });
         stopped = true;
@@ -261,7 +267,7 @@ export function PipelineView() {
       }
     }
 
-    setFinalResult(lastOutput ? { ...lastOutput, operations } : null);
+    setFinalResult(lastOutput ? { kind: lastOutput.kind, data: lastOutput.data, params: lastOutput.params, operations, allResults } : null);
     setRunning(false);
   }
 
@@ -330,7 +336,7 @@ export function PipelineView() {
       <div
         class="pipeline-view__columns"
         ref=${columnsRef}
-        style=${`grid-template-columns: ${libraryWidth}px ${HANDLE_WIDTH}px ${recipeWidth}px ${HANDLE_WIDTH}px minmax(${MIN_OUTPUT_WIDTH}px, 1fr);`}
+        style=${`grid-template-columns: ${libraryWidth}px ${HANDLE_WIDTH}px ${recipeWidth}px ${HANDLE_WIDTH}px ${outputWidth}px`}
       >
         <aside class="pipeline-view__library panel">
           <h3 class="panel__title">Operations</h3>
@@ -340,35 +346,31 @@ export function PipelineView() {
         <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("library", e)}></div>
 
         <section class="pipeline-view__recipe panel">
-          <h3 class="panel__title">
-            Recipe
-            <button class="btn btn--primary btn--small" disabled=${running || !ws.sessionId || recipe.length === 0} onClick=${bake}>
-              ${running ? "Baking…" : "Bake ▶"}
-            </button>
-          </h3>
+          <h3 class="panel__title">Recipe</h3>
+          <button class="btn btn--primary recipe__bake-btn" disabled=${running || !ws.sessionId || recipe.length === 0} onClick=${bake}>
+            ${running ? "Baking…" : "Bake ▶"}
+          </button>
           ${!ws.sessionId ? html`<p class="output-panel__hint">Load a sequence above to enable execution.</p>` : null}
           <div class="recipe-stack scroll-y" onDragOver=${handleStackDragOver} onDrop=${handleStackDrop} onDragLeave=${handleStackDragLeave}>
-            ${recipe.length === 0
-              ? html`<div class="recipe-stack__empty">Click or drag an operation from the left to build your recipe.</div>`
-              : recipe.flatMap(
-                  (block, index) => [
-                    html`<div key=${`gap-${block.uid}`} class="recipe-gap ${overIndex === index ? "recipe-gap--active" : ""}"></div>`,
-                    html`
-                      <${RecipeBlock}
-                        key=${block.uid}
-                        block=${block}
-                        def=${blockById(block.defId)}
-                        index=${index}
-                        onParamsChange=${updateParams}
-                        onRemove=${removeBlock}
-                        onToggle=${toggleBlock}
-                        onDropOnMutationList=${handleDropOnMutationList}
-                        onDropLibraryBlock=${handleDropLibraryBlockOnMutationList}
-                        dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
-                      />
-                    `,
-                  ]
-                )}
+            ${recipe.flatMap(
+              (block, index) => [
+                html`<div key=${`gap-${block.uid}`} class="recipe-gap ${overIndex === index ? "recipe-gap--active" : ""}"></div>`,
+                html`
+                  <${RecipeBlock}
+                    key=${block.uid}
+                    block=${block}
+                    def=${blockById(block.defId)}
+                    index=${index}
+                    onParamsChange=${updateParams}
+                    onRemove=${removeBlock}
+                    onToggle=${toggleBlock}
+                    onDropOnMutationList=${handleDropOnMutationList}
+                    onDropLibraryBlock=${handleDropLibraryBlockOnMutationList}
+                    dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
+                  />
+                `,
+              ]
+            )}
             <div
               class="recipe-stack__tail ${overIndex === recipe.length ? "recipe-block--drop-target" : ""}"
               onDragOver=${(e) => {
@@ -378,12 +380,12 @@ export function PipelineView() {
               onDragLeave=${() => setOverIndex(null)}
               onDrop=${handleTailDrop}
             >
-              drop here to append
+              drop operation blocs here
             </div>
           </div>
         </section>
 
-        <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("recipe", e)}></div>
+        <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("output", e)}></div>
 
         <div class="pipeline-view__output-col">
           <div class="pipeline-view__session">
@@ -391,6 +393,7 @@ export function PipelineView() {
           </div>
           <section class="pipeline-view__output panel">
             <h3 class="panel__title">Output</h3>
+            ${running ? html`<button type="button" class="btn btn--danger btn--small output__stop-btn" onClick=${() => { cancelRef.current = true; }}>Stop</button>` : null}
             ${running ? html`<${Spinner} label="Running recipe…" />` : null}
             <${OutputPanel} result=${finalResult} />
           </section>

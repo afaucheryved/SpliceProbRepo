@@ -140,14 +140,6 @@ export function SessionBar({ compact = false }) {
             Fetch Ensembl
           </button>
           ${ws.busy ? html`<${Spinner} label="Contacting backend…" />` : null}
-          ${ws.sessionId
-            ? html`
-                <span class="session-bar__meta" title=${ws.sessionId}>
-                  session <code>${ws.sessionId.slice(0, 8)}…</code>
-                </span>
-                <span class="session-bar__meta">${ws.baseSequence.length.toLocaleString()} bp</span>
-              `
-            : null}
         </div>
       </form>
       <${ErrorBanner} message=${fastaError} onDismiss=${() => setFastaError(null)} />

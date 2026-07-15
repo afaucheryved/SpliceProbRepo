@@ -1,6 +1,7 @@
 import { html, useState } from "../../lib/preact.js";
 import { BlockForm } from "./BlockForm.js";
 import { categorySlug } from "./blockDefinitions.js";
+import { parseTrackedAlterationDisplay } from "../../lib/sequence.js";
 
 const STATUS_ICON = {
   idle: "○",
@@ -20,6 +21,32 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
   // same label -> entry map GET /get/allsimpleprobas returns.
   const isExpandableSummary = def.outputKind === "probaHistory" && block.resultData && typeof block.resultData === "object";
   const trackedLabels = isExpandableSummary ? Object.keys(block.resultData) : [];
+
+  const topSet = new Set();
+  if (isExpandableSummary && block.params?.showTopOnly) {
+    const topN = Math.max(1, block.params.topN || 5);
+    const entries = Object.entries(block.resultData);
+    const scored = entries.map(([label, entry]) => {
+      const acceptor = entry?.delta_proba?.acceptor_proba;
+      const donor = entry?.delta_proba?.donor_proba;
+      let maxDelta = 0;
+      if (acceptor) {
+        for (const v of Object.values(acceptor)) {
+          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+        }
+      }
+      if (donor) {
+        for (const v of Object.values(donor)) {
+          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+        }
+      }
+      return { label, maxDelta };
+    });
+    scored.sort((a, b) => b.maxDelta - a.maxDelta);
+    for (const s of scored.slice(0, topN)) {
+      topSet.add(s.label);
+    }
+  }
   return html`
     <div
       class="recipe-block ${block.enabled ? "" : "recipe-block--disabled"} ${dragHandlers.isOver ? "recipe-block--drop-target" : ""}"
@@ -66,7 +93,16 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
                     ${summaryExpanded
                       ? html`
                           <ul class="recipe-block__tracked-list">
-                            ${trackedLabels.map((label) => html`<li key=${label} class="mono">${label}</li>`)}
+                            ${trackedLabels.map((label) => {
+                              const entry = block.resultData[label];
+                              const disp = parseTrackedAlterationDisplay(label, entry);
+                              const isTop = topSet.has(label);
+                              return html`<li key=${label} class="mono">
+                                ${isTop
+                                  ? html`<strong>${disp ? html`${disp.stepNum} : ${disp.opType} : ${disp.rangeText}` : label}</strong>`
+                                  : (disp ? html`<strong>${disp.stepNum}</strong> : <strong>${disp.opType}</strong> : ${disp.rangeText}` : label)}
+                              </li>`;
+                            })}
                           </ul>
                         `
                       : null}

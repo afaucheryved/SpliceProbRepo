@@ -3,7 +3,7 @@ import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
 import { useTheme, seriesColors } from "../../lib/theme.js";
-import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone, parseTrackedAlterationDisplay } from "../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone, parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
 // type is `dict[set[mut], float]` but the actual runtime keys are Python
@@ -157,25 +157,7 @@ function ProbaHistoryOutput({ data, params }) {
 
   let renderedEntries = entries;
   if (params?.showTopOnly && entries.length > 0) {
-    const topN = Math.max(1, params.topN || 5);
-    const scored = entries.map(([label, entry]) => {
-      const acceptor = entry.delta_proba?.acceptor_proba;
-      const donor = entry.delta_proba?.donor_proba;
-      let maxDelta = 0;
-      if (acceptor) {
-        for (const v of Object.values(acceptor)) {
-          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
-        }
-      }
-      if (donor) {
-        for (const v of Object.values(donor)) {
-          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
-        }
-      }
-      return { label, entry, maxDelta };
-    });
-    scored.sort((a, b) => b.maxDelta - a.maxDelta);
-    renderedEntries = scored.slice(0, topN).map((s) => [s.label, s.entry]);
+    renderedEntries = topTrackedEntries(data, params.topN).map((s) => [s.label, s.entry]);
   }
   return html`
     <div>

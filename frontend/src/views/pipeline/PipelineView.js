@@ -17,7 +17,6 @@ const nextUid = () => `blk_${++uidSeq}`;
 // never squeeze a column away entirely.
 const HANDLE_WIDTH = 8;
 const MIN_LIBRARY_WIDTH = 180;
-const MIN_RECIPE_WIDTH = 360;
 const MIN_OUTPUT_WIDTH = 320;
 
 function summarize(def, result) {
@@ -59,9 +58,6 @@ export function PipelineView() {
     if (rs.column === "library") {
       const maxLibrary = Math.max(MIN_LIBRARY_WIDTH, rs.containerWidth - gaps - rs.startRecipe - MIN_OUTPUT_WIDTH);
       setLibraryWidth(Math.min(Math.max(MIN_LIBRARY_WIDTH, rs.startLibrary + delta), maxLibrary));
-    } else if (rs.column === "recipe") {
-      const maxRecipe = Math.max(MIN_RECIPE_WIDTH, rs.containerWidth - gaps - rs.startLibrary - MIN_OUTPUT_WIDTH);
-      setRecipeWidth(Math.min(Math.max(MIN_RECIPE_WIDTH, rs.startRecipe + delta), maxRecipe));
     } else if (rs.column === "output") {
       const maxOutput = Math.max(MIN_OUTPUT_WIDTH, rs.containerWidth - gaps - rs.startLibrary - rs.startRecipe);
       setOutputWidth(Math.min(Math.max(MIN_OUTPUT_WIDTH, rs.startOutput + delta), maxOutput));

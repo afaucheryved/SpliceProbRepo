@@ -1,7 +1,7 @@
 import { html, useState } from "../../lib/preact.js";
 import { BlockForm } from "./BlockForm.js";
 import { categorySlug } from "./blockDefinitions.js";
-import { parseTrackedAlterationDisplay } from "../../lib/sequence.js";
+import { parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
 
 const STATUS_ICON = {
   idle: "○",
@@ -24,26 +24,7 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
 
   const topSet = new Set();
   if (isExpandableSummary && block.params?.showTopOnly) {
-    const topN = Math.max(1, block.params.topN || 5);
-    const entries = Object.entries(block.resultData);
-    const scored = entries.map(([label, entry]) => {
-      const acceptor = entry?.delta_proba?.acceptor_proba;
-      const donor = entry?.delta_proba?.donor_proba;
-      let maxDelta = 0;
-      if (acceptor) {
-        for (const v of Object.values(acceptor)) {
-          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
-        }
-      }
-      if (donor) {
-        for (const v of Object.values(donor)) {
-          maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
-        }
-      }
-      return { label, maxDelta };
-    });
-    scored.sort((a, b) => b.maxDelta - a.maxDelta);
-    for (const s of scored.slice(0, topN)) {
+    for (const s of topTrackedEntries(block.resultData, block.params.topN)) {
       topSet.add(s.label);
     }
   }

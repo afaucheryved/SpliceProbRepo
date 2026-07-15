@@ -143,6 +143,35 @@ export function flattenDeltaTrack(deltaByIndex) {
   return { positions: indices, values, proportions };
 }
 
+// Largest |delta| across a tracked alteration entry's acceptor/donor
+// positions, used to rank entries for top-N filtering.
+export function maxTrackedDelta(entry) {
+  const acceptor = entry?.delta_proba?.acceptor_proba;
+  const donor = entry?.delta_proba?.donor_proba;
+  let maxDelta = 0;
+  if (acceptor) {
+    for (const v of Object.values(acceptor)) {
+      maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+    }
+  }
+  if (donor) {
+    for (const v of Object.values(donor)) {
+      maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+    }
+  }
+  return maxDelta;
+}
+
+// Ranks a label -> entry map (as returned by GET /get/allsimpleprobas) by
+// `maxTrackedDelta()` and keeps the top `topN`.
+export function topTrackedEntries(entriesByLabel, topN) {
+  const n = Math.max(1, topN || 5);
+  return Object.entries(entriesByLabel ?? {})
+    .map(([label, entry]) => ({ label, entry, maxDelta: maxTrackedDelta(entry) }))
+    .sort((a, b) => b.maxDelta - a.maxDelta)
+    .slice(0, n);
+}
+
 // Task 20: per-bar green (increase) / red (decrease) fill for a delta-vs-base
 // bar chart, one color per position in `values`. `colors` is a
 // `{ deltaPositive, deltaNegative }` pair (see lib/theme.js `seriesColors()`)
@@ -160,7 +189,7 @@ export function deltaBarColors(values, colors) {
 // `positions`) directly on a delta bar chart, without a separate annotation
 // plugin. Bars outside the range (or when `range` is null -- position not
 // determinable) get no border.
-export function zoneBorderStyle(positions, range, _color = "#ffffff") {
+export function zoneBorderStyle(positions, range) {
   if (!range) {
     return { borderColor: positions.map(() => "transparent"), borderWidth: positions.map(() => 0) };
   }

@@ -143,6 +143,35 @@ export function flattenDeltaTrack(deltaByIndex) {
   return { positions: indices, values, proportions };
 }
 
+// Largest |delta| across a tracked alteration entry's acceptor/donor
+// positions, used to rank entries for top-N filtering.
+export function maxTrackedDelta(entry) {
+  const acceptor = entry?.delta_proba?.acceptor_proba;
+  const donor = entry?.delta_proba?.donor_proba;
+  let maxDelta = 0;
+  if (acceptor) {
+    for (const v of Object.values(acceptor)) {
+      maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+    }
+  }
+  if (donor) {
+    for (const v of Object.values(donor)) {
+      maxDelta = Math.max(maxDelta, Math.abs(v?.value ?? 0));
+    }
+  }
+  return maxDelta;
+}
+
+// Ranks a label -> entry map (as returned by GET /get/allsimpleprobas) by
+// `maxTrackedDelta()` and keeps the top `topN`.
+export function topTrackedEntries(entriesByLabel, topN) {
+  const n = Math.max(1, topN || 5);
+  return Object.entries(entriesByLabel ?? {})
+    .map(([label, entry]) => ({ label, entry, maxDelta: maxTrackedDelta(entry) }))
+    .sort((a, b) => b.maxDelta - a.maxDelta)
+    .slice(0, n);
+}
+
 // Task 20: per-bar green (increase) / red (decrease) fill for a delta-vs-base
 // bar chart, one color per position in `values`. `colors` is a
 // `{ deltaPositive, deltaNegative }` pair (see lib/theme.js `seriesColors()`)
@@ -160,11 +189,11 @@ export function deltaBarColors(values, colors) {
 // `positions`) directly on a delta bar chart, without a separate annotation
 // plugin. Bars outside the range (or when `range` is null -- position not
 // determinable) get no border.
-export function zoneBorderStyle(positions, range, color = "#bbf7d0") {
+export function zoneBorderStyle(positions, range) {
   if (!range) {
     return { borderColor: positions.map(() => "transparent"), borderWidth: positions.map(() => 0) };
   }
-  const borderColor = positions.map((p) => (p >= range.from && p <= range.to ? color : "transparent"));
+  const borderColor = positions.map((p) => (p >= range.from && p <= range.to ? "#ffffff" : "transparent"));
   const borderWidth = positions.map((p) => (p >= range.from && p <= range.to ? 2 : 0));
   return { borderColor, borderWidth };
 }
@@ -246,7 +275,42 @@ export function parseTrackedLabel(label) {
   return null;
 }
 
-// Diff two same-length sequences into point-mutation strings.
+// Parse a tracked-alteration label into display components for the new
+// "**{N}** : **{operation_type}** : [{from} - {to}]" syntax.
+// Returns { stepNum, opType, rangeText } or null if unparseable.
+export function parseTrackedAlterationDisplay(label, entry) {
+  let stepNum = "";
+  let body = label;
+  const stepMatch = label.match(/^(\d+):\s*/);
+  if (stepMatch) {
+    stepNum = stepMatch[1];
+    body = label.slice(stepMatch[0].length);
+  }
+
+  let opType = "mutation";
+  if (body.startsWith("insert:")) opType = "insert";
+  else if (body.startsWith("delete_by_pattern:") || body.startsWith("delete:")) opType = "delete";
+  else if (body.startsWith("move:")) opType = "move";
+  else if (body.startsWith("copy_paste:")) opType = "copy & paste";
+  else if (body.startsWith("replace:")) opType = "replace";
+  else if (body === "mutate_independently") opType = "random mutation";
+
+  let rangeText;
+  if (entry?.match_start != null && entry?.match_end != null) {
+    rangeText = `[${entry.match_start + 1} - ${entry.match_end + 1}]`;
+  } else if (entry?.delta_proba) {
+    rangeText = "(all mutations applied)";
+  } else {
+    const parsed = parseTrackedLabel(label);
+    if (parsed) {
+      rangeText = `[${parsed.from + 1} - ${parsed.to + 1}]`;
+    } else {
+      rangeText = "(all mutations applied)";
+    }
+  }
+
+  return { stepNum, opType, rangeText };
+}
 // Returns { mutations: string[], error: null } on success,
 // or { mutations: null, error: "message" } on failure.
 export function diffToPointMutations(before, after) {

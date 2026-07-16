@@ -3,7 +3,7 @@ import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { useWorkspace } from "../../lib/workspace.js";
 import { useTheme, seriesColors } from "../../lib/theme.js";
-import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone } from "../../lib/sequence.js";
+import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone, parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
 
 // Best-effort parse of a pattern-in-zona dict key. The backend's return
 // type is `dict[set[mut], float]` but the actual runtime keys are Python
@@ -80,19 +80,15 @@ export function TrackedAlterationEntry({ label, entry }) {
   const theme = useTheme();
   const colors = seriesColors(theme);
   const entrySeq = entry["altered sequence"];
-  const { range, isPatternMatch } = trackedEntryZone(label, entry);
-  const zoneColor = isPatternMatch ? colors.matchPale : colors.zonePale;
-  const zoneLabelClass = isPatternMatch ? "output-panel__history-label--match" : "output-panel__history-label--zone";
-  const zoneText = range
-    ? ` (${isPatternMatch ? "match" : "positions"} ${range.from + 1}-${range.to + 1})`
-    : "";
+  const { range } = trackedEntryZone(label, entry);
+  const disp = parseTrackedAlterationDisplay(label, entry);
 
   if (!entry.delta_proba) {
     const acceptor = flattenProbaTrack(entry.acceptor_proba);
     const donor = flattenProbaTrack(entry.donor_proba);
     return html`
       <div class="output-panel__history-entry" key=${label}>
-        <p class="output-panel__history-label mono">${label}</p>
+        <p class="output-panel__history-label mono">${disp ? html`<strong>${disp.stepNum}</strong> : <strong>${disp.opType}</strong> : ${disp.rangeText}` : label}</p>
         <p class="field-hint">Delta view not available — this operation changes the sequence length.</p>
         <${Chart}
           type="line"
@@ -111,11 +107,12 @@ export function TrackedAlterationEntry({ label, entry }) {
 
   const acceptor = flattenDeltaTrack(entry.delta_proba.acceptor_proba);
   const donor = flattenDeltaTrack(entry.delta_proba.donor_proba);
-  const acceptorZone = zoneBorderStyle(acceptor.positions, range, zoneColor);
-  const donorZone = zoneBorderStyle(donor.positions, range, zoneColor);
+  const acceptorZone = zoneBorderStyle(acceptor.positions, range);
+  const donorZone = zoneBorderStyle(donor.positions, range);
   return html`
     <div class="output-panel__history-entry" key=${label}>
-      <p class="output-panel__history-label ${zoneLabelClass} mono">${label}${zoneText}</p>
+      <p class="output-panel__history-label mono">${disp ? html`<strong>${disp.stepNum}</strong> : <strong>${disp.opType}</strong> : ${disp.rangeText}` : label}</p>
+      ${range ? html`<p class="field-hint output-panel__zone-hint">tracked mutation</p>` : null}
       <${Chart}
         type="bar"
         height=${140}
@@ -152,17 +149,22 @@ export function TrackedAlterationEntry({ label, entry }) {
   `;
 }
 
-function ProbaHistoryOutput({ data }) {
+function ProbaHistoryOutput({ data, params }) {
   const entries = Object.entries(data ?? {});
   if (entries.length === 0) {
     return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
+  }
+
+  let renderedEntries = entries;
+  if (params?.showTopOnly && entries.length > 0) {
+    renderedEntries = topTrackedEntries(data, params.topN).map((s) => [s.label, s.entry]);
   }
   return html`
     <div>
       <p class="output-panel__hint">
         Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
       </p>
-      ${entries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
+      ${renderedEntries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
     </div>
   `;
 }
@@ -211,17 +213,26 @@ export function OutputPanel({ result }) {
   if (!result) {
     return html`<p class="output-panel__hint">Run the recipe to see output here.</p>`;
   }
-  const { kind, data, operations } = result;
-  // Extract the "altered sequence" from the response if present; used as
-  // the context for chart peak-click popups (Task 10).
-  const seq = data?.["altered sequence"];
-  return html`
-    <div class="output-panel">
-      ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} operations=${operations} />` : null}
+
+  const results = result.allResults && result.allResults.length > 0 ? result.allResults : [result];
+
+  function renderResult(r, i) {
+    const { kind, data } = r;
+    const seq = data?.["altered sequence"];
+    const ops = i === results.length - 1 ? result.operations : null;
+    return html`
+      ${i > 0 ? html`<hr class="output-panel__divider" />` : null}
+      ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} operations=${ops} />` : null}
       ${kind === "proba" ? html`<${ProbaOutput} data=${data} sequence=${seq} />` : null}
-      ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} />` : null}
+      ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} params=${r.params} />` : null}
       ${kind === "delta" ? html`<${DeltaOutput} data=${data} sequence=${seq} />` : null}
       ${kind === "zones" ? html`<${ZonesOutput} data=${data} />` : null}
+    `;
+  }
+
+  return html`
+    <div class="output-panel">
+      ${results.map((r, i) => renderResult(r, i))}
     </div>
   `;
 }

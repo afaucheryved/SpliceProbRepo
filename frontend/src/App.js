@@ -4,6 +4,9 @@ import { PipelineView } from "./views/pipeline/PipelineView.js";
 import { DashboardView } from "./views/dashboard/DashboardView.js";
 import { ComparativeView } from "./views/comparative/ComparativeView.js";
 import { useTheme, toggleTheme } from "./lib/theme.js";
+import { workspace } from "./lib/workspace.js";
+
+const DEFAULT_SAMPLE = "acgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgt";
 
 const PROPOSALS = [
   { value: "pipeline", label: "Pipeline", hint: "CyberChef-style" },
@@ -30,6 +33,14 @@ export function App() {
       </div>
       <div class="app-header__controls">
         <${SegmentedControl} options=${PROPOSALS} value=${proposal} onChange=${setProposal} />
+        <button
+          type="button"
+          class="btn btn--small"
+          title="Create a brand-new session with the default sample sequence"
+          onClick=${() => workspace.initSession(DEFAULT_SAMPLE)}
+        >
+          New session
+        </button>
         <button
           type="button"
           class="btn btn--small theme-toggle"

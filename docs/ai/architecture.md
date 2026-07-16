@@ -58,7 +58,7 @@ SpliceProbRepo/
     ├── services/
     │   ├── __init__.py
     │   ├── general_services.py      # GeneralServices + IndependentGeneralServices (result_per_seqences, return_proba_*)
-    │   └── redis_session.py         # Redis session management (get/set with TTL, namespaced keys)
+    │   └── redis_session.py         # Redis session management (get/set, namespaced keys, no expiry by default)
     └── test/
         ├── __inti__.py
         ├── global_var.py            # Global variables for tests (CONTEXT, BASE, paths)
@@ -144,7 +144,7 @@ duality (documented in earlier revisions of this file) has been resolved.
 - Flow: `Pydantic GeneticVariant` → `create_internal_variant()` factory → `InternalGeneticVariant` with `session_id`
 - The factory (`app/domain/internal_gv_factory.py`) creates variant instances, stores the base sequence in Redis under `session:{uuid}:base_sequence`, and tracks the current altered sequence under `session:{uuid}:current_altered_sequence`.
 - The `AlteredSequenceTrackerMixin` persists one-hot encodings, probability dictionaries, and SpliceAI mutation labels to Redis under `session:{uuid}:altered_sequences`.
-- Session data has a TTL of 30 minutes.
+- Session data has no expiry by default (`set_session_data()`'s `ttl` param defaults to `None`, i.e. no `EX` set on the Redis key); no call site currently passes an explicit `ttl`.
 - If no real Redis server is reachable, `app/services/redis_session.py` transparently falls back to an in-memory `fakeredis` client.
 
 #### Legacy singleton (vestigial, not used by any live endpoint)
@@ -241,7 +241,11 @@ frontend/
 │                                    # backend — backend has no CORS middleware)
 └── src/
     ├── main.js                     # mounts <App/>
-    ├── App.js                      # top-level 3-way SegmentedControl + view switch
+    ├── App.js                      # top-level 3-way SegmentedControl + view switch,
+    │                                # a "New session" shortcut button (mints a fresh
+    │                                # session with a hardcoded default sample sequence,
+    │                                # bypassing SessionBar's draft textarea), and the
+    │                                # theme toggle
     ├── api/
     │   └── client.js               # one function per backend endpoint; thin fetch wrapper
     ├── lib/
@@ -309,8 +313,10 @@ file (several planned tasks explicitly overlap here — see the file itself).
   vertical marker line until the popup is closed or a new point is
   clicked; `chartjs-plugin-zoom` is registered once at module scope
   (wheel-zoom requires **Ctrl** — plain wheel is left free for page scroll
-  — plus click-drag panning and `+`/`-`/reset toolbar buttons; there is no
-  drag-to-zoom and no pan-range slider). Bar charts above 500 points are
+  — plus click-drag panning and `+`/`-`/reset toolbar buttons, right-aligned;
+  there is no drag-to-zoom and no pan-range slider, and no on-screen "Ctrl +
+  scroll to zoom" hint — that static text label was removed in the
+  2026-07-15 plan5 UX pass). Bar charts above 500 points are
   downsampled by `chartLogic.js`'s `aggregateBarSeries()` (keeps the 150
   largest-magnitude bars full width, collapses intervening runs into a
   thin placeholder bar at that run's own peak) and use
@@ -334,7 +340,10 @@ file (several planned tasks explicitly overlap here — see the file itself).
   fetch deliberately requests a **throwaway session** (never the active
   `session_id`) because `POST /ensembl/get` silently no-ops on an existing
   `session_id` — see 9.4 point 6 and root `AGENTS.md`. See 9.4 for the
-  backend calls behind each action.
+  backend calls behind each action. As of the 2026-07-15 plan5 pass, it no
+  longer renders the `session <id>…` / `N bp` indicator badges next to
+  "Fetch Ensembl" — `App.js`'s separate "New session" header button (9.1)
+  is now the quick one-click way to mint a session without those badges.
 - **`SequenceTrack.js`** — monospace FASTA-style viewer, 60 bases/row, a
   position gutter, and per-base diff highlighting against an optional
   `reference` sequence (hover title shows `position N: ref→base`). Also
@@ -375,6 +384,16 @@ Task 8's fix, returns `null` rather than a fabricated range for operation
 types the label doesn't encode a position for), `diffToPointMutations()`
 (Task 9 — same-length before/after diff → point-mutation strings, rejects
 length-changing diffs). `toCsv()`/`downloadFile()` for exports.
+
+As of the 2026-07-15 plan5 pass: `parseTrackedAlterationDisplay(label, entry)`
+renders a tracked-alteration label as `**{step}** : **{operation type}** :
+[{from} - {to}]` (falling back to `(all mutations applied)` when no range is
+determinable) — used by both `OutputPanel.js`'s `TrackedAlterationEntry` and
+`RecipeBlock.js`'s expandable tracked-entry list instead of the raw backend
+label string. `maxTrackedDelta(entry)`/`topTrackedEntries(entriesByLabel,
+topN)` rank a `GET /get/allsimpleprobas` label→entry map by each entry's
+largest-magnitude acceptor/donor delta, powering the Tracked Alterations
+block's new "Show only top entries" / "Top N entries" fields (9.5).
 
 #### 9.4 `frontend/src/lib/workspace.js` — the shared state store
 
@@ -440,7 +459,14 @@ a block never requires touching `BlockForm.js`), `outputKind` (drives which
 `OutputPanel.js` sub-renderer fires), and `run(params)` (calls into
 `workspace`). `AlterationToolbox.js` (Workbench) reuses this exact same
 array for its single-shot operation picker — a block definition change
-affects both proposals at once.
+affects both proposals at once. `BlockForm.js`'s field-type registry
+(`FIELD_COMPONENTS`) also has a `checkbox` type (`CheckboxField`, plan5)
+alongside `sequence`/`int`/`select`/`mutationList`/`matrix4x4`/`modelSet` —
+the "Tracked Alterations → Baseline Probability" block uses it for a
+`showTopOnly` toggle plus an `int` `topN` field (default top 5), consumed by
+`topTrackedEntries()` (9.3) in both `OutputPanel.js`'s `ProbaHistoryOutput`
+and `RecipeBlock.js`'s expandable tracked-entry list (entries outside the
+top-N are rendered plain, top-N entries bolded, when the toggle is on).
 
 Dragging a block onto a Scoring block's mutation-list field works from two
 different sources, both handled in `PipelineView.js`: dragging an
@@ -452,12 +478,35 @@ recipe just before the target and returns an inline message telling the
 user to Bake, then drag it again — now from the recipe stack, not the
 library — to actually append its mutations.
 
+The recipe stack's drop target and its "no blocks yet" empty state used to
+be two separate elements (a full-panel placeholder shown only when
+`recipe.length === 0`, plus a small permanent "drop here to append" tail
+strip); as of plan5 they're merged into one always-rendered tail drop zone
+("drop operation blocs here") that also serves as the empty-recipe
+affordance, so there's a single drop target regardless of recipe length.
+The "Bake ▶" button moved out of the "Recipe" panel-title row into its own
+full-width `recipe__bake-btn` under the title. While a bake is running, the
+Output panel shows a "Stop" button (`output__stop-btn`, sets a `cancelRef`
+checked before each remaining block runs — later blocks are marked
+`skipped`, same as the pre-existing post-error skip path) next to the
+`Spinner`.
+
 The three Pipeline columns (library/recipe/output) have draggable
 `col-resize` boundaries (`pipeline-view__resize-handle`, driven by
-`libraryWidth`/`recipeWidth` state in `PipelineView.js`); each floor
-(`MIN_LIBRARY_WIDTH`/`MIN_RECIPE_WIDTH`/`MIN_OUTPUT_WIDTH`) matches the
-column's old fixed width, so resizing can never squeeze a column away
-entirely.
+`libraryWidth`/`recipeWidth`/`outputWidth` state in `PipelineView.js`); each
+floor (`MIN_LIBRARY_WIDTH`/`MIN_OUTPUT_WIDTH`) matches the column's old
+fixed width, so resizing can never squeeze a column away entirely. As of
+plan5 the second handle resizes the **output** column instead of the
+recipe column (`MIN_RECIPE_WIDTH` was removed; the recipe column has no
+floor of its own beyond what the other two columns' floors leave it), and
+the output column has a fixed pixel width (`${outputWidth}px`) instead of
+the previous `minmax(${MIN_OUTPUT_WIDTH}px, 1fr)` flexible track.
+
+`OutputPanel.js` renders every block's result from the most recent bake, not
+just the last one: `bake()` accumulates each block's `{ kind, data, params }`
+into `finalResult.allResults`, and `OutputPanel` maps over that array,
+inserting an `output-panel__divider` `<hr>` between entries (only the last
+entry gets the run's `operations` Map for `SequenceOutput`'s hover titles).
 
 ## Key Design Patterns
 - **Factory Pattern**: `create_internal_variant()` in `internal_gv_factory.py`

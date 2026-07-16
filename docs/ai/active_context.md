@@ -6,6 +6,8 @@
 
 Tasks 5-20 batch (frontend UX + critical fixes, planned 2026-07-09/2026-07-10) — all `[DONE]` as of `[JUDGE]` review 2026-07-10. See `docs/ai/progress.md` for implementation detail and `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8", "Judge Review — Tasks 6, 8, 9, 10, 11", and "Judge Review — Tasks 12–20 batch" for review detail. Two significant bugs were found and fixed during the Tasks 12-20 review pass: `PipelineView.js` was missing the `workspace` import, meaning Task 7's Bake-duplication fix had never actually been live (silently swallowed `ReferenceError`); and Task 17's per-match pattern variant tracking was corrupting the session's persisted working sequence for any operation chained afterward.
 
+"plan5" batch (2026-07-15): merged the Pipeline recipe stack's empty-state/drop-zone into one target, added an output-column resize handle (replacing the old recipe-column handle), lowered panel/button corner radii, added an `App.js`-level "New session" shortcut button, made the Bake button full-width, switched tracked-alteration zone borders to a plain white/thicker style with a new `**{step}** : **{op}** : [{from}-{to}]` label syntax (`parseTrackedAlterationDisplay()`), added top-N filtering to the Tracked Alterations block (`showTopOnly`/`topN` checkbox+int fields, `topTrackedEntries()`), added divider lines between multiple Bake results in the Output panel, added a Stop button to cancel an in-progress Bake, removed `SessionBar`'s session-id/bp-count badges, and removed the default 30-minute Redis session TTL (`set_session_data()` now defaults to no expiry). See `docs/ai/progress.md` (Session Management, Task 13/18/20 "Superseded" notes) and `docs/ai/architecture.md` §9 for detail.
+
 ### Completed Tasks
 
 ## Current Working Files
@@ -13,10 +15,11 @@ Tasks 5-20 batch (frontend UX + critical fixes, planned 2026-07-09/2026-07-10) �
 ## Recent Changes
 | Date | Change | Files Affected |
 |------|--------|---------------|
+| 2026-07-15 | plan5: Pipeline UX tweaks (merged drop zone, resize handle, radii, new-session button, full-width Bake, stop button, top-N filter, new label syntax, dividers) + removed default session TTL | `app/services/redis_session.py`, `frontend/serve.py`, `frontend/src/App.js`, `frontend/src/components/shared/Chart.js`, `frontend/src/components/shared/SessionBar.js`, `frontend/src/lib/sequence.js`, `frontend/src/styles/base.css`, `frontend/src/views/pipeline/*` |
 
 ## Next Steps (Future / Optional)
-- No more tasks currently planned — the full Task 5-20 backlog is closed.
-- Human smoke-test in a live browser recommended before release (no Node/browser available in this sandbox): drag-and-drop (Tasks 9/12), the chart zoom toolbar/drag-select (Task 13), and the new delta-bar chart rendering (Task 20) are the highest-value spots to check.
+- No more tasks currently planned — the full Task 5-20 backlog and the plan5 batch are both closed.
+- Human smoke-test in a live browser recommended before release (no Node/browser available in this sandbox): drag-and-drop (Tasks 9/12), the chart zoom toolbar/drag-select (Task 13), the delta-bar chart rendering (Task 20), and plan5's new resize/stop/top-N/merged-drop-zone behavior are the highest-value spots to check.
 - See `docs/ai/progress.md` for historical detail.
 
 ---

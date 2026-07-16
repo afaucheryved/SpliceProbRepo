@@ -174,7 +174,10 @@ export const BLOCK_DEFINITIONS = [
     label: "Tracked Alterations → Baseline Probability",
     summary:
       "Baseline acceptor/donor splicing probability for every structural alteration performed so far in this session (one chart per tracked entry, most recent last).",
-    fields: [],
+    fields: [
+      { key: "showTopOnly", label: "Show only top entries", type: "checkbox", default: false },
+      { key: "topN", label: "Top N entries", type: "int", default: 5 },
+    ],
     outputKind: "probaHistory",
     run: () => workspace.fetchAllSimpleProbas(),
   },

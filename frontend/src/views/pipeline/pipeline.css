@@ -10,7 +10,7 @@
 .pipeline-view__session {
   background: var(--app-panel);
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 0.75rem 1rem;
 }
 
@@ -72,6 +72,11 @@
   min-height: 0;
 }
 
+.output__stop-btn {
+  align-self: flex-start;
+  margin-bottom: 0.4rem;
+}
+
 /* ---- Block library ---- */
 
 .block-library__category {
@@ -88,7 +93,7 @@
   align-items: center;
   background: var(--app-panel-alt);
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 0.4rem 0.6rem;
   margin-bottom: 0.35rem;
   cursor: grab;
@@ -114,13 +119,18 @@
   flex: 1;
 }
 
+.recipe__bake-btn {
+  width: 100%;
+  margin-bottom: 0.6rem;
+}
+
 .recipe-stack__empty {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 3px dashed var(--app-border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 2rem 1rem;
   text-align: center;
   color: var(--text-muted);
@@ -137,7 +147,7 @@
   align-items: center;
   justify-content: center;
   border: 3px dashed var(--app-border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 0.5rem;
   text-align: center;
   color: var(--text-muted);
@@ -147,7 +157,7 @@
 .recipe-block {
   background: var(--app-panel-alt);
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 0.6rem 0.7rem;
   cursor: default;
 }
@@ -367,7 +377,7 @@
 }
 
 .output-panel__history-entry {
-  border-top: 1px solid var(--app-border);
+  border-top: 3px solid #4b5563;
   padding-top: 0.5rem;
   margin-top: 0.5rem;
 }
@@ -382,4 +392,14 @@
   font-size: 0.72rem;
   color: var(--text-muted);
   margin: 0 0 0.3rem;
+}
+
+.output-panel__zone-hint {
+  margin: -0.2rem 0 0.2rem;
+}
+
+.output-panel__divider {
+  border: none;
+  border-top: 2px solid var(--app-border);
+  margin: 0.85rem 0;
 }

@@ -68,7 +68,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             )
 
         try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
+            with urllib.request.urlopen(req, timeout=None) as resp:
                 self._relay(resp.status, resp.getheaders(), resp.read())
         except urllib.error.HTTPError as e:
             self._relay(e.code, e.headers.items() if e.headers else [], e.read())

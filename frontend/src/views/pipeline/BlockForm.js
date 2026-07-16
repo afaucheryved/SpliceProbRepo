@@ -43,6 +43,17 @@ function SelectField({ field, value, onChange }) {
   `;
 }
 
+function CheckboxField({ field, value, onChange }) {
+  return html`
+    <div class="field">
+      <label class="checkbox-pill">
+        <input type="checkbox" checked=${!!value} onChange=${(e) => onChange(e.currentTarget.checked)} />
+        ${field.label}
+      </label>
+    </div>
+  `;
+}
+
 function MutationListField({ field, value, onChange, blockUid, onDropOnMutationList, onDropLibraryBlock }) {
   const rows = value ?? [];
   const [dropError, setDropError] = useState(null);
@@ -209,6 +220,7 @@ const FIELD_COMPONENTS = {
   sequence: TextField,
   int: IntField,
   select: SelectField,
+  checkbox: CheckboxField,
   mutationList: MutationListField,
   matrix4x4: Matrix4x4Field,
   modelSet: ModelSetField,

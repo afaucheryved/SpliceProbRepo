@@ -9,7 +9,7 @@ A FastAPI-based backend for computing splicing probabilities and analyzing seque
 - **Sequence Alteration** — Modify sequences by index or pattern (insert, delete, replace, move, copy-paste).
 - **Random Mutation** — Mutate sequences using a configurable 4×4 probability matrix.
 - **Genomic Analysis** — Zone detection with PELT change-point algorithm and windowed mutant enumeration.
-- **Session Management** — Redis-backed sessions for multi-user isolation (30-minute TTL, configurable).
+- **Session Management** — Redis-backed sessions for multi-user isolation (no expiry by default; TTL configurable per call).
 - **Multiple Scoring Methods** — Euclidean, Manhattan, Weighted (pondered), Quadratic norms.
 
 ## Quick Start

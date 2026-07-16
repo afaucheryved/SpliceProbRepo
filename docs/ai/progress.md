@@ -119,6 +119,8 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Superseded (2026-07-14, Pipeline view UX overhaul):** the human click-test flagged above surfaced that plain-wheel zoom fought normal page scrolling and the pan slider was hard to use. Redesigned: wheel-zoom now requires **Ctrl** (plain wheel scrolls the page), drag-to-select zoom and the pan slider were removed in favor of a static "Ctrl + scroll to zoom" hint plus click-drag panning, and the `+`/`-`/reset buttons were kept. See `docs/ai/architecture.md` §9.2 (`Chart.js`) for the current behavior.
 
+  **Further superseded (2026-07-15, plan5):** the "Ctrl + scroll to zoom" static hint text was removed from the toolbar (the `+`/`-`/reset buttons are now right-aligned in its place); the actual Ctrl-required wheel-zoom behavior is unchanged.
+
   **Files:** `frontend/src/components/shared/Chart.js`, `frontend/src/lib/chartLogic.js`, `frontend/src/styles/base.css`.
 
 - [x] **Task 14 — "Tracked Alterations" block: expandable per-entry summary**
@@ -220,6 +222,8 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 
   **Files:** `app/domain/mixins.py`, `app/services/general_services.py`, `app/router/get_router.py`, `frontend/src/views/pipeline/OutputPanel.js`, `frontend/src/views/dashboard/panels/HistoryLog.js`, `frontend/src/views/dashboard/dashboard.css`, `frontend/src/views/comparative/DetailChart.js`, `frontend/src/lib/sequence.js` (`deltaBarColors()`, `zoneBorderStyle()`, `trackedEntryZone()`), `frontend/src/styles/base.css`, tests in `app/test/test_mixins.py`.
 
+  **Superseded (2026-07-15, plan5), `OutputPanel.js`/`DetailChart.js` only:** `zoneBorderStyle()`'s `color` param was dropped — the zone border is now always white (a thicker 2px border), no longer pale-red for a pattern match vs. pale-green otherwise. `TrackedAlterationEntry` (`OutputPanel.js`) replaced the colored label + "(match N-M)"/"(positions N-M)" suffix with `parseTrackedAlterationDisplay()`'s `**{step}** : **{operation type}** : [{from} - {to}]` syntax and, when a zone range exists, a plain "tracked mutation" caption underneath instead of color-coding the label text. `DetailChart.js` inherits this via its `TrackedAlterationEntry` reuse. `HistoryLog.js`'s own compact peak-summary rendering is untouched — it reads `trackedEntryZone()`'s `isPatternMatch` directly (not through `zoneBorderStyle()`) and still pale-color-codes its own zone label independently.
+
 ---
 
 ## Reference: Feature Catalog & Historical Fix Log
@@ -255,7 +259,7 @@ Authored by `[PLANNER]` from a batch of user-supplied feature requests, checked 
 - [x] `tuple_mutation()` utility to derive SpliceAI mutation labels from sequence diffs.
 
 ### Session Management  ✅
-- [x] Redis-backed session storage with 30-minute TTL (configurable via `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB` env vars).
+- [x] Redis-backed session storage (connection configurable via `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB` env vars). **Changed (2026-07-15, plan5):** `set_session_data()`'s `ttl` param now defaults to `None` (no expiry) instead of 1800s/30 minutes — no call site passes an explicit `ttl`, so session data no longer expires on its own.
 - [x] `create_internal_variant()` factory for session-aware variant creation.
 - [x] `AlteredSequenceTrackerMixin` for persisting alteration history (proba, mutation labels).
 - [x] Compact Redis storage: one-hot arrays no longer persisted in `session:{id}:altered_sequences` entries (previously stored ~20,000+ × 4 floats per alteration call). One-hot encoding is now computed transiently, in memory, only during model calls.

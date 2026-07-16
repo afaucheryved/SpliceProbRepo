@@ -1,6 +1,7 @@
 import { html, useState } from "../../lib/preact.js";
 import { BlockForm } from "./BlockForm.js";
 import { categorySlug } from "./blockDefinitions.js";
+import { parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
 
 const STATUS_ICON = {
   idle: "○",
@@ -20,6 +21,13 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
   // same label -> entry map GET /get/allsimpleprobas returns.
   const isExpandableSummary = def.outputKind === "probaHistory" && block.resultData && typeof block.resultData === "object";
   const trackedLabels = isExpandableSummary ? Object.keys(block.resultData) : [];
+
+  const topSet = new Set();
+  if (isExpandableSummary && block.params?.showTopOnly) {
+    for (const s of topTrackedEntries(block.resultData, block.params.topN)) {
+      topSet.add(s.label);
+    }
+  }
   return html`
     <div
       class="recipe-block ${block.enabled ? "" : "recipe-block--disabled"} ${dragHandlers.isOver ? "recipe-block--drop-target" : ""}"
@@ -66,7 +74,16 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
                     ${summaryExpanded
                       ? html`
                           <ul class="recipe-block__tracked-list">
-                            ${trackedLabels.map((label) => html`<li key=${label} class="mono">${label}</li>`)}
+                            ${trackedLabels.map((label) => {
+                              const entry = block.resultData[label];
+                              const disp = parseTrackedAlterationDisplay(label, entry);
+                              const isTop = topSet.has(label);
+                              return html`<li key=${label} class="mono">
+                                ${isTop
+                                  ? html`<strong>${disp ? html`${disp.stepNum} : ${disp.opType} : ${disp.rangeText}` : label}</strong>`
+                                  : (disp ? html`<strong>${disp.stepNum}</strong> : <strong>${disp.opType}</strong> : ${disp.rangeText}` : label)}
+                              </li>`;
+                            })}
                           </ul>
                         `
                       : null}

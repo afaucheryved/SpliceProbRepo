@@ -202,9 +202,8 @@ export function Chart({ type = "line", labels = [], datasets = [], height = 260,
   };
 
   return h("div", { style: "display:flex; flex-direction:column; gap:0.25rem;" },
-    h("div", { class: "chart-toolbar" },
+    h("div", { class: "chart-toolbar", style: "justify-content:flex-end;" },
       h("button", { type: "button", class: "chart-toolbar__btn", title: "Zoom out", onClick: zoomOut }, "−"),
-      h("span", { class: "chart-toolbar__hint" }, "Ctrl + scroll to zoom"),
       h("button", { type: "button", class: "chart-toolbar__btn", title: "Zoom in", onClick: zoomIn }, "+"),
       h("button", { type: "button", class: "chart-toolbar__btn", title: "Reset zoom", onClick: resetZoom }, "⌂")
     ),

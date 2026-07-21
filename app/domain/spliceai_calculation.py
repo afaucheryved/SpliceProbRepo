@@ -128,7 +128,7 @@ class SpliceAIModels(tf.keras.Model):
         x_batched = np.expand_dims(encoded, axis=0)
         return x_batched
     
-    @wrapp_calcul
+    #@wrapp_calcul
     def run(self, x_input: genome, models_used: set[int] | None = None, keep_gradiant=False):
         """
         The forward pass of TensorFlow (equivalent to forward() in PyTorch).
@@ -156,3 +156,58 @@ class SpliceAIModels(tf.keras.Model):
             return y_mean
         else:
             return y_mean.numpy()
+        
+    #@wrapp_calcul
+    def run_batches(self, x_input: list[str], models_used: set[int] | None = None, keep_gradiant=False):
+        """
+        The forward pass of TensorFlow for a batch of sequences.
+        x_input: List of DNA sequence strings
+        """
+        # 1. Encodage One-Hot de chaque séquence de la liste
+        x_encoded = [self._one_hot_encoder(_x) for _x in x_input]
+        
+        x = tf.concat(x_encoded, axis=0)
+        
+        valid_models = {1, 2, 3, 4, 5}
+        models_used_id = {1, 2, 3, 4, 5} if models_used is None else models_used
+
+        if not set(models_used_id).issubset(valid_models):
+            raise ValueError("ERROR: models_used only takes values in {1, 2, 3, 4, 5} or None.")
+        
+        outputs = [
+            model(x)
+            for index, model in enumerate(self.models_list) 
+            if index + 1 in models_used_id
+        ]
+
+        stacked_outputs = tf.stack(outputs, axis=0)
+        y_mean = tf.reduce_mean(stacked_outputs, axis=0)
+        
+        if keep_gradiant:
+            return y_mean
+        else:
+            return y_mean.numpy()
+
+    def get_single_base_score(self, sequence: genome, position: int, models_used: set[int] | None = None) -> np.ndarray:
+        """
+        Splicing score for the single base at `position` (0-based index into
+        `sequence`): [P(neither), P(acceptor), P(donor)].
+
+        Only the +/-5,000nt real-sequence window around `position` (clipped
+        to `sequence`'s bounds) is fed through `run()`, instead of the whole
+        `sequence` -- `run()`'s own N-padding covers the rest of the model's
+        10,000nt receptive field exactly as it would for a full-sequence
+        call, so the result is identical to indexing `position` out of
+        `run(sequence)`, just without paying to run every other position.
+        """
+        if not 0 <= position < len(sequence):
+            raise ValueError(f"position {position} out of range for sequence of length {len(sequence)}")
+
+        half_context = 5000
+        start = max(0, position - half_context)
+        end = min(len(sequence), position + half_context)
+        window = sequence[start:end]
+        target_idx = position - start
+
+        y = self.run(window, models_used=models_used)
+        return y[0, target_idx, :]

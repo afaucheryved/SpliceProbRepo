@@ -9,7 +9,8 @@ from app.domain.sequence_functions import (AlterationFunctionsByIndex,
                                            SequenceFactory, 
                                            RandomAlterationFunctions, 
                                            WindowMutationFunctions)
-from app.domain.genomic_analysis import ImportanceSplicingSearch
+from app.domain.genomic_analysis import (ImportanceSplicingSearch, 
+                                         SpotPositionFunctions)
 from app.domain.calcul_function import (IsValid, 
                                         Scoring)
 from app.services.general_services import GeneralServices
@@ -24,7 +25,8 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
                                            ImportanceSplicingSearch, 
                                            IsValid, 
                                            Scoring, 
-                                           GeneralServices): # for domain layer use only
+                                           GeneralServices, 
+                                           SpotPositionFunctions): # for domain layer use only
     """
         alter-ego of GeneticVariant, for domain layer uses.
         Inherits of all functions from sequence_function and genomic_analysis
@@ -44,6 +46,7 @@ class InternalGeneticVariant(AlterationFunctionsByIndex,
         IsValid.__init__(self)
         Scoring.__init__(self)
         GeneralServices.__init__(self)
+        SpotPositionFunctions.__init__(self)
         
         if name is not None:
             self.name = name

@@ -2,6 +2,8 @@
 
 ## Current Objectives
 
+Task 21 (`hight_impact_mutation_position()` fixes) is implementation-complete, pending `[JUDGE]` review — see `docs/ai/progress.md` under Task 21 for full detail. Next action: a `[JUDGE]` session should verify Task 21, then a `[WORKER]` session can start Task 22 (blocked by Task 21).
+
 ## Previous Objectives (superseded)
 
 Tasks 5-20 batch (frontend UX + critical fixes, planned 2026-07-09/2026-07-10) — all `[DONE]` as of `[JUDGE]` review 2026-07-10. See `docs/ai/progress.md` for implementation detail and `docs/ai/audits_history.md` → "Judge Review — Tasks 5–8", "Judge Review — Tasks 6, 8, 9, 10, 11", and "Judge Review — Tasks 12–20 batch" for review detail. Two significant bugs were found and fixed during the Tasks 12-20 review pass: `PipelineView.js` was missing the `workspace` import, meaning Task 7's Bake-duplication fix had never actually been live (silently swallowed `ReferenceError`); and Task 17's per-match pattern variant tracking was corrupting the session's persisted working sequence for any operation chained afterward.

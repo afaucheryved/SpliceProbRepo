@@ -34,11 +34,22 @@ class _FakeModel:
         import numpy as np
         return np.zeros((len(sequence) + 2 * context, 4), dtype=np.float32)
 
+    def get_single_base_score(self, sequence, position, models_used=None):
+        # [P(neither), P(acceptor), P(donor)] -- see SpliceAIModels.get_single_base_score.
+        import numpy as np
+        return np.zeros(3, dtype=np.float32)
+
+    def run_batches(self, x_input, models_used=None, keep_gradiant=False):
+        import numpy as np
+        seq_len = len(x_input[0]) if x_input else 0
+        return np.zeros((len(x_input), seq_len, 3), dtype=np.float32)
+
 
 patching_targets = [
     # (module_qualname, replaced_with)
     ("app.services.general_services.my_model", _FakeModel()),
     ("app.schemas.internal_gv_schema.my_model", _FakeModel()),
+    ("app.domain.genomic_analysis.my_model", _FakeModel()),
 ]
 
 for qualname, replacement in patching_targets:
@@ -458,3 +469,54 @@ class TestAnalysis:
         # May be 200 or 500 depending on ruptures internals; we just verify
         # the server does not crash with a 422.
         assert resp.status_code in (200, 500)
+
+    @pytest.mark.asyncio
+    async def test_high_impact_position(self, async_client):
+        # /resetgv mints a session without going through the pre-existing
+        # broken result_per_sequences() shape-mismatch path that
+        # /GetSimpleProb/ hits with this test module's _FakeModel stub (see
+        # TestSimpleProb failures) -- we only need a session with a stored
+        # sequence here, not a computed proba.
+        create_payload = {
+            "name": "high_impact_test",
+            "sequence": "atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcga",
+            "mutations": [],
+            "session_id": None,
+        }
+        create_resp = await async_client.post("/resetgv", json=create_payload)
+        sid = create_resp.json()["session_id"]
+
+        resp = await async_client.post(
+            "/analysis/highimpactposition",
+            json={"base": 5, "session_id": sid},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"donor", "acceptor"}
+        for region in ("donor", "acceptor"):
+            assert len(data[region]) == 4
+            assert all(len(row) == len(create_payload["sequence"]) for row in data[region])
+
+    @pytest.mark.asyncio
+    async def test_high_impact_position_interval_out_of_range_base(self, async_client):
+        create_payload = {
+            "name": "high_impact_test_interval",
+            "sequence": "atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcga",
+            "mutations": [],
+            "session_id": None,
+        }
+        create_resp = await async_client.post("/resetgv", json=create_payload)
+        sid = create_resp.json()["session_id"]
+
+        # base is outside the interval -- the domain layer raises ValueError,
+        # which the router re-raises as a plain Exception. This test module's
+        # async_client uses ASGITransport with its default
+        # raise_app_exceptions=True, so an unhandled route exception
+        # propagates to the caller rather than becoming an HTTP 500 response
+        # (unlike a real deployed server) -- assert on that propagation
+        # directly instead of a status code.
+        with pytest.raises(Exception, match="out of range"):
+            await async_client.post(
+                "/analysis/highimpactposition",
+                json={"base": 1, "interval": [5, 10], "session_id": sid},
+            )

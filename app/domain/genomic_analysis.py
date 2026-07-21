@@ -4,7 +4,7 @@ import random as rd
 import ruptures as rpt
 import matplotlib.pyplot as plt
 import tensorflow as tf
-import os
+import scipy.signal
 from pkg_resources import resource_filename
 
 #local import
@@ -16,6 +16,7 @@ from app.domain.sequence_functions import (AlterationFunctionsByIndex as afbi,
 from app.domain.calcul_function import IndependentScoring
 from app.test.global_var import GlobalVar
 from app.schemas.independant_gv_schema import IndependentGeneticVariant
+from app.domain.initialization.initalize_my_model import my_model
 
 class ImportanceSplicingSearch:
     """
@@ -135,6 +136,144 @@ class ImportanceSplicingSearch:
                 
         return dict(sorted(scored_mut.items())) # simply returns the most significant mutations
                 
+class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvariant
+    """
+    The goal of the functions here is to deduce what mutation impact splicing probability of a gven base position.
+    """
+    def hight_impact_mutation_position(self, base: int, interval: list[int] | None = None,  models_used: set[int] = {1, 2, 3, 4, 5}, batch_size: int = 80)-> JSON:
+        """
+        INPUT :
+            - base : the base tracked position, absolute within self.sequence.
+            - interval : optional [start, end) sub-region of self.sequence to scan for
+              mutations; base must fall within it.
+            - self.sequence : the sequence we want to work with, containing the base we want to track.
+        OUTPUT : {
+            "donor" : list[  ]   --> list corresponding of the max mutations.
+
+            "acceptor" : list[  ]   --> list corresponding of the max mutations.
+        }
+
+        return a list of float scoring the capacity of each position to impacte the tracked base splicing probability.
+        One list for ech possible sequence.
+
+        Example : 
+        
+        base=5, sequence="acgtacgtacgtacgt"
+
+
+        splicing proba of the 5th base
+            ^
+            |
+          0 |--------------------------  <-- A, C, G, T
+            |         \   /
+      -0.5  |           -  <-- C
+            |________________________________________>
+                        15                            mutation position
+
+        This graph, ploted thanks the 4 lists returned by the function 'hight_impact_mutation_position', show that 
+        mutate the 15th base into a C significatively reduce the splicing probability of the tracked base (here, the 5th)
+        """
+
+        if models_used is None:
+            models_used = {1, 2, 3, 4, 5}
+
+        if interval is not None:
+            if not (interval[0] <= base < interval[1]):
+                raise ValueError(
+                    f"base {base} is out of range for interval [{interval[0]}, {interval[1]})"
+                )
+            sequence = self.sequence[interval[0]:interval[1]]
+            local_base = base - interval[0]
+        else:
+            sequence = self.sequence
+            local_base = base
+        seq_len = len(sequence)
+
+        def acgt(b_mut):
+            mapping = {"A": 0, "C": 1, "G": 2, "T": 3}
+            if b_mut in mapping:
+                return mapping[b_mut]
+            raise ValueError("Only ACGT is allowed")
+
+        output = {
+            "donor": [[0.0] * seq_len for _ in range(4)],
+            "acceptor": [[0.0] * seq_len for _ in range(4)]
+        }
+
+        baseprob = my_model.get_single_base_score(sequence=sequence, position=local_base, models_used=models_used)
+
+        mutation_tasks = []
+        for b_o in range(seq_len):
+            for b_mut in "ACGT":
+                if b_mut != sequence[b_o]:
+
+                    mut_seq = sequence[:b_o] + b_mut + sequence[b_o+1:]
+                    mutation_tasks.append((mut_seq, b_o, b_mut))
+
+        print("\n mutation_tasks done! \n") # loging
+
+        for i in range(0, len(mutation_tasks), batch_size):
+
+            print(f"\n batch #{i//batch_size} / {len(mutation_tasks)//batch_size + 1} runing...\n") # loging
+
+            batch = mutation_tasks[i:i+batch_size]
+            batch_sequences = [task[0] for task in batch]
+
+            batch_probas = my_model.run_batches(batch_sequences, models_used=models_used)
+
+            for idx, probas in enumerate(batch_probas):
+                _, b_o, b_mut = batch[idx]
+                
+                donor_value = probas[local_base][1] - baseprob[1]
+                acceptor_value = probas[local_base][2] - baseprob[2]
+
+                mut_idx = acgt(b_mut)
+                output["donor"][mut_idx][b_o] = donor_value
+                output["acceptor"][mut_idx][b_o] = acceptor_value
+
+        output_histo = {
+            "donor": [
+                max((nuc_list[i] for nuc_list in output["donor"]), key=abs) 
+                for i in range(seq_len)
+            ],
+            "acceptor": [
+                max((nuc_list[i] for nuc_list in output["acceptor"]), key=abs) 
+                for i in range(seq_len)
+            ]
+        }
+        return output_histo
+
+    def spot_regulation_interval_peaks(self, mutation_json: dict[str, list[float]], prominence: float = 1e-6, min_width: float = 1.0) -> dict[str, list[tuple[int, int]]]:
+        """
+        Returns the intervals corresponding to the high impact mutation intervals.
+        Uses scipy.signal.find_peaks library with prominence and width parameters.
+        """
+        output = {"acceptor": [], "donor": []}
+        
+        for key, axe_probs in mutation_json.items():
+
+            signal = np.array(axe_probs)
+            
+            peaks, properties = scipy.signal.find_peaks(np.abs(signal), prominence=prominence, width=min_width)
+            
+            intervals = []
+            if len(peaks) > 0:
+                left_bounds = np.floor(properties["left_ips"]).astype(int)
+                right_bounds = np.ceil(properties["right_ips"]).astype(int)
+
+                for left, right in zip(left_bounds, right_bounds):
+                    intervals.append((left, right))
+            
+            output[key] = intervals
+            
+        return output
+
+
+            
+
+
+
+
 ## ---- ML POV ----
 
 #this is a test 

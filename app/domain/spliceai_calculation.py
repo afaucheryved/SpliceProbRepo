@@ -209,5 +209,10 @@ class SpliceAIModels(tf.keras.Model):
         window = sequence[start:end]
         target_idx = position - start
 
+        import sys
+        #np.set_printoptions(threshold=sys.maxsize)
+
         y = self.run(window, models_used=models_used)
+        #print(y[0, target_idx-10:target_idx+10, :])
+
         return y[0, target_idx, :]

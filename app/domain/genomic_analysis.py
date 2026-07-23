@@ -202,34 +202,40 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
 
         baseprob = my_model.get_single_base_score(sequence=sequence, position=local_base, models_used=models_used)
 
-        mutation_tasks = []
-        for b_o in range(seq_len):
+        mutations_to_batches: dict = {} # id : [sequence, from_base] --> the id is the position of the muted base.
+        for id, b_o in enumerate(sequence):
             for b_mut in "ACGT":
-                if b_mut != sequence[b_o]:
+                if b_mut != sequence[id]:
 
-                    mut_seq = sequence[:b_o] + b_mut + sequence[b_o+1:]
-                    mutation_tasks.append((mut_seq, b_o, b_mut))
+                    mut_seq = sequence[:id] + b_mut + sequence[id+1:]
+                    mutations_to_batches[id] = [mut_seq, b_o]
 
         print("\n mutation_tasks done! \n") # loging
 
-        for i in range(0, len(mutation_tasks), batch_size):
+        for i in range(0, len(mutations_to_batches), batch_size):
 
-            print(f"\n batch #{i//batch_size} / {len(mutation_tasks)//batch_size + 1} runing...\n") # loging
+            print(f"\n batch #{i//batch_size} / {len(mutations_to_batches)//batch_size + 1} runing...\n") # loging
 
-            batch = mutation_tasks[i:i+batch_size]
-            batch_sequences = [task[0] for task in batch]
-
-            batch_probas = my_model.run_batches(batch_sequences, models_used=models_used)
+            # batch creation
+            batch = []
+            for id in range(i, i+batch_size):
+                if id < len(mutations_to_batches):
+                    batch.append(mutations_to_batches[id][0])
+            
+            #run
+            batch_probas = my_model.run_batches(batch, models_used=models_used)
+            print(batch_probas[0][local_base][1])
 
             for idx, probas in enumerate(batch_probas):
-                _, b_o, b_mut = batch[idx]
+                b_o = mutations_to_batches[i+idx][1]
+                print(b_o)
                 
                 donor_value = probas[local_base][1] - baseprob[1]
                 acceptor_value = probas[local_base][2] - baseprob[2]
 
-                mut_idx = acgt(b_mut)
-                output["donor"][mut_idx][b_o] = donor_value
-                output["acceptor"][mut_idx][b_o] = acceptor_value
+                mut_idx = acgt(b_o)
+                output["donor"][mut_idx][i+idx] = donor_value
+                output["acceptor"][mut_idx][i+idx] = acceptor_value
 
         output_histo = {
             "donor": [
@@ -268,8 +274,66 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             
         return output
 
+    def rubber_window(self, exon: tuple[int], interval: tuple[int] | None = None, window_size: int = 5, models_used: tuple[int] | None = None, batch_size: int = 50, neutral_window: bool = False)-> JSON:
+        """
+        define troncated sequences variants (exon always entire, only far extremity can be replaced by 'N's), in order to determine repressor or activator zona.
+        as a sub-sequence can be troncated in several variants, we get the mean of sub_sequence_importance (end).
+        """
+        #var
+        troncated_sequences: dict[tuple[int], str] = {}
+        proba_by_window: dict[tuple[int], tuple[int]] = {} # key: interval window, value : donor_proba, acceptor_proba.
 
-            
+        #const
+        exon_lenght = exon[1]-exon[0]
+        sequence = self.sequence[interval[0] : interval[1]].upper() if interval is not None else self.sequence.upper()
+        sequence_lenght = len(sequence)
+        baseprob_donor = my_model.get_single_base_score(sequence=self.sequence, position=exon[1], models_used=models_used)[1]
+        baseprob_acceptor = my_model.get_single_base_score(sequence=self.sequence, position=exon[0], models_used=models_used)[2]
+        print(f"baseprob don, acc : {baseprob_donor}, {baseprob_acceptor}\n")
+        
+        if not neutral_window:
+            for left_window in range(exon[0], 0, -window_size):
+                for right_window in range(exon[1], sequence_lenght, window_size):
+                    troncated_sequences[(left_window, right_window)] = "N" * left_window + sequence[left_window:right_window] + "N" * (sequence_lenght - right_window) # replace troncated by 'N's, keeping full sequence length so batches stay same-shape and positions line up
+        else:
+            for i in range(0, exon[0], window_size):
+                right = min(i+window_size, sequence_lenght) # clamp so the last window doesn't overshoot sequence_lenght and change the sequence length
+                troncated_sequences[(i, right)] = sequence[:i] + "N"*(right-i) + sequence[right:]
+            for i in range(exon[1], sequence_lenght-1, window_size):
+                right = min(i+window_size, sequence_lenght)
+                troncated_sequences[(i, right)] = sequence[:i] + "N"*(right-i) + sequence[right:]
+        print("\n ready to batch! \n")
+
+        # batch
+        for i in range(0, len(troncated_sequences), batch_size):
+            print(f"\n batch # {i//batch_size} / {len(troncated_sequences)//batch_size +1}")
+            batch=[]
+            window_label=[]
+            for id in range(i, i+batch_size):
+                if id < len(troncated_sequences):
+                    batch.append(list(troncated_sequences.values())[id]) # get value for batch
+                    window_label.append(list(troncated_sequences.keys())[id]) # get key in order to not forget it.
+            #proba run
+            batch_probas = my_model.run_batches(batch, models_used=models_used)
+            for key, value in zip(window_label, batch_probas):
+                proba_by_window[key] = [value[exon[1]][1], value[exon[0]][2]] # key: window intervals, value: donor_prob of donor sit , acceptor_prob of acceptor sit
+        
+        # analysis part : fore each 'window_size' long sub-sequence of the self.sequence, see if delet it modifies the donor or acceptor prob.
+
+        #key: interval, value: list of donor,accepto probas.
+        sub_sequence_importance = dict(zip([(i, i+window_size if i+window_size < sequence_lenght else sequence_lenght-1) for i in range(0, sequence_lenght-1, window_size)], [[] for _ in range(0, sequence_lenght-1, window_size)]))
+
+        for sub_sequ_window in sub_sequence_importance.keys():
+            for window, proba in proba_by_window.items():
+                if window[0]<=sub_sequ_window[0] and sub_sequ_window[1]<=window[1]: # if the sub-sequence is in the window
+                    sub_sequence_importance[sub_sequ_window].append([proba[0]-baseprob_donor, proba[1]-baseprob_acceptor])
+                    print(f"proba : {proba[0]},  {proba[1]}\n")
+
+        # mean of each proba
+        for k,v in sub_sequence_importance.items():
+            sub_sequence_importance[k]=[np.mean([ad[0] for ad in v]), np.mean([ad[1] for ad in v])]
+
+        return sub_sequence_importance
 
 
 

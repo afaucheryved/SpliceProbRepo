@@ -274,66 +274,72 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             
         return output
 
-    def rubber_window(self, exon: tuple[int], interval: tuple[int] | None = None, window_size: int = 5, models_used: tuple[int] | None = None, batch_size: int = 50, neutral_window: bool = False)-> JSON:
-        """
-        define troncated sequences variants (exon always entire, only far extremity can be replaced by 'N's), in order to determine repressor or activator zona.
-        as a sub-sequence can be troncated in several variants, we get the mean of sub_sequence_importance (end).
-        """
-        #var
-        troncated_sequences: dict[tuple[int], str] = {}
-        proba_by_window: dict[tuple[int], tuple[int]] = {} # key: interval window, value : donor_proba, acceptor_proba.
+    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int = 5, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int, int] | None = None)-> JSON:
 
+        """
+        Mask sliding intervals of the sequence with 'N's -- the exon/intron boundary
+        is not treated specially, a masked interval can straddle it or sit entirely
+        inside the exon or an intron, exactly as if that boundary didn't exist -- and
+        measure how each masking shifts the donor/acceptor splicing scores at the
+        given exon's boundaries (exon[1] for the donor site, exon[0] for the acceptor
+        site).
+
+        Two mutually exclusive tiling modes:
+          - default: non-overlapping windows of fixed length `window_size`, tiling
+            the whole (sub)sequence from position 0.
+          - all_window_size=(m, n): for every base position of the (sub)sequence,
+            try every mask length p in [m, n] starting at that base, producing
+            (n - m + 1) overlapping variants per base (e.g. m=1, n=8 gives 8
+            variants per base).
+
+        Returns a dict keyed by the (start, end) coordinates of the masked
+        interval, each mapping to {"donor": float, "acceptor": float, "subsequence": str} :
+        the delta of the donor/acceptor score at the exon boundaries caused by
+        masking that interval, and the original bases it replaced.
+        """
         #const
-        exon_lenght = exon[1]-exon[0]
         sequence = self.sequence[interval[0] : interval[1]].upper() if interval is not None else self.sequence.upper()
         sequence_lenght = len(sequence)
-        baseprob_donor = my_model.get_single_base_score(sequence=self.sequence, position=exon[1], models_used=models_used)[1]
-        baseprob_acceptor = my_model.get_single_base_score(sequence=self.sequence, position=exon[0], models_used=models_used)[2]
-        print(f"baseprob don, acc : {baseprob_donor}, {baseprob_acceptor}\n")
-        
-        if not neutral_window:
-            for left_window in range(exon[0], 0, -window_size):
-                for right_window in range(exon[1], sequence_lenght, window_size):
-                    troncated_sequences[(left_window, right_window)] = "N" * left_window + sequence[left_window:right_window] + "N" * (sequence_lenght - right_window) # replace troncated by 'N's, keeping full sequence length so batches stay same-shape and positions line up
+        baseprob_donor = my_model.get_single_base_score(sequence=self.sequence, position=exon[1], models_used=models_used)[2]
+        baseprob_acceptor = my_model.get_single_base_score(sequence=self.sequence, position=exon[0], models_used=models_used)[1]
+
+        #var
+        troncated_sequences: dict[tuple[int, int], str] = {}
+
+        if all_window_size is not None:
+            m, n = all_window_size
+            for start in range(sequence_lenght):
+                for p in range(m, n + 1):
+                    end = min(start + p, sequence_lenght)
+                    if end <= start:
+                        continue
+                    key = (start, end)
+                    if key not in troncated_sequences: # skip redundant clamped duplicates
+                        troncated_sequences[key] = sequence[:start] + "N" * (end - start) + sequence[end:]
         else:
-            for i in range(0, exon[0], window_size):
-                right = min(i+window_size, sequence_lenght) # clamp so the last window doesn't overshoot sequence_lenght and change the sequence length
-                troncated_sequences[(i, right)] = sequence[:i] + "N"*(right-i) + sequence[right:]
-            for i in range(exon[1], sequence_lenght-1, window_size):
-                right = min(i+window_size, sequence_lenght)
-                troncated_sequences[(i, right)] = sequence[:i] + "N"*(right-i) + sequence[right:]
+            for start in range(0, sequence_lenght, window_size):
+                end = min(start + window_size, sequence_lenght)
+                troncated_sequences[(start, end)] = sequence[:start] + "N" * (end - start) + sequence[end:]
+
         print("\n ready to batch! \n")
 
         # batch
-        for i in range(0, len(troncated_sequences), batch_size):
-            print(f"\n batch # {i//batch_size} / {len(troncated_sequences)//batch_size +1}")
-            batch=[]
-            window_label=[]
-            for id in range(i, i+batch_size):
-                if id < len(troncated_sequences):
-                    batch.append(list(troncated_sequences.values())[id]) # get value for batch
-                    window_label.append(list(troncated_sequences.keys())[id]) # get key in order to not forget it.
+        window_scores: dict[tuple[int, int], dict] = {}
+        windows = list(troncated_sequences.keys())
+        for i in range(0, len(windows), batch_size):
+            print(f"\n batch # {i//batch_size} / {len(windows)//batch_size +1}")
+            batch_keys = windows[i:i+batch_size]
+            batch = [troncated_sequences[key] for key in batch_keys]
             #proba run
             batch_probas = my_model.run_batches(batch, models_used=models_used)
-            for key, value in zip(window_label, batch_probas):
-                proba_by_window[key] = [value[exon[1]][1], value[exon[0]][2]] # key: window intervals, value: donor_prob of donor sit , acceptor_prob of acceptor sit
-        
-        # analysis part : fore each 'window_size' long sub-sequence of the self.sequence, see if delet it modifies the donor or acceptor prob.
+            for key, value in zip(batch_keys, batch_probas):
+                window_scores[key] = {
+                    "donor": value[exon[1]][2] - baseprob_donor,
+                    "acceptor": value[exon[0]][1] - baseprob_acceptor,
+                    "subsequence": sequence[key[0]:key[1]],
+                }
 
-        #key: interval, value: list of donor,accepto probas.
-        sub_sequence_importance = dict(zip([(i, i+window_size if i+window_size < sequence_lenght else sequence_lenght-1) for i in range(0, sequence_lenght-1, window_size)], [[] for _ in range(0, sequence_lenght-1, window_size)]))
-
-        for sub_sequ_window in sub_sequence_importance.keys():
-            for window, proba in proba_by_window.items():
-                if window[0]<=sub_sequ_window[0] and sub_sequ_window[1]<=window[1]: # if the sub-sequence is in the window
-                    sub_sequence_importance[sub_sequ_window].append([proba[0]-baseprob_donor, proba[1]-baseprob_acceptor])
-                    print(f"proba : {proba[0]},  {proba[1]}\n")
-
-        # mean of each proba
-        for k,v in sub_sequence_importance.items():
-            sub_sequence_importance[k]=[np.mean([ad[0] for ad in v]), np.mean([ad[1] for ad in v])]
-
-        return sub_sequence_importance
+        return window_scores
 
 
 

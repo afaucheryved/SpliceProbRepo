@@ -14,6 +14,7 @@ _CHAR_SCORE = {
     "C": np.array([0.0, 0.30, 0.40]),
     "G": np.array([0.0, 0.50, 0.60]),
     "T": np.array([0.0, 0.70, 0.80]),
+    "N": np.array([0.0, 0.90, 0.95]),  # rubber_window() masks windows with "N"
 }
 
 
@@ -102,3 +103,58 @@ def test_hight_impact_mutation_position_return_shape(monkeypatch):
         for base_scores in result[region]:
             assert len(base_scores) == len(sequence)
             assert all(isinstance(v, float) for v in base_scores)
+
+
+def test_rubber_window_batch_error_propagates(monkeypatch):
+    """A failure mid-batch must raise, not be swallowed into a None return."""
+    sequence = "ACGTACGTAC"
+    gv = InternalGeneticVariant(sequence=sequence)
+
+    monkeypatch.setattr(genomic_analysis.my_model, "get_single_base_score", _fake_get_single_base_score)
+
+    def _raising_run_batches(sequences, models_used=None):
+        raise RuntimeError("model failure")
+
+    monkeypatch.setattr(genomic_analysis.my_model, "run_batches", _raising_run_batches)
+
+    with pytest.raises(RuntimeError):
+        gv.rubber_window(exon=(2, 5), window_size=4)
+
+
+def test_rubber_window_fixed_window_size_tiling(monkeypatch):
+    sequence = "ACGTACGTAC"
+    gv = InternalGeneticVariant(sequence=sequence)
+
+    monkeypatch.setattr(genomic_analysis.my_model, "get_single_base_score", _fake_get_single_base_score)
+    monkeypatch.setattr(genomic_analysis.my_model, "run_batches", _fake_run_batches)
+
+    result = gv.rubber_window(exon=(2, 5), window_size=4)
+
+    assert set(result.keys()) == {(0, 4), (4, 8), (8, 10)}
+    for window in result.values():
+        assert set(window.keys()) == {"donor", "acceptor", "subsequence"}
+
+
+def test_rubber_window_all_window_size_tiling(monkeypatch):
+    sequence = "ACGT"
+    gv = InternalGeneticVariant(sequence=sequence)
+
+    monkeypatch.setattr(genomic_analysis.my_model, "get_single_base_score", _fake_get_single_base_score)
+    monkeypatch.setattr(genomic_analysis.my_model, "run_batches", _fake_run_batches)
+
+    result = gv.rubber_window(exon=(0, 3), all_window_size=(1, 2))
+
+    assert set(result.keys()) == {
+        (0, 1), (0, 2), (1, 2), (1, 3), (2, 3), (2, 4), (3, 4),
+    }
+
+
+def test_rubber_window_both_tiling_modes_raises(monkeypatch):
+    sequence = "ACGTACGTAC"
+    gv = InternalGeneticVariant(sequence=sequence)
+
+    monkeypatch.setattr(genomic_analysis.my_model, "get_single_base_score", _fake_get_single_base_score)
+    monkeypatch.setattr(genomic_analysis.my_model, "run_batches", _fake_run_batches)
+
+    with pytest.raises(ValueError):
+        gv.rubber_window(exon=(2, 5), window_size=4, all_window_size=(1, 2))

@@ -274,7 +274,7 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             
         return output
 
-    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int = 5, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int, int] | None = None)-> JSON:
+    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int | None = None, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int, int] | None = None)-> JSON:
 
         """
         Mask sliding intervals of the sequence with 'N's -- the exon/intron boundary
@@ -284,9 +284,11 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
         given exon's boundaries (exon[1] for the donor site, exon[0] for the acceptor
         site).
 
-        Two mutually exclusive tiling modes:
-          - default: non-overlapping windows of fixed length `window_size`, tiling
-            the whole (sub)sequence from position 0.
+        Two mutually exclusive tiling modes -- passing both `window_size` and
+        `all_window_size` raises `ValueError`:
+          - default (neither given, or only `window_size`): non-overlapping
+            windows of fixed length `window_size` (defaults to 5), tiling the
+            whole (sub)sequence from position 0.
           - all_window_size=(m, n): for every base position of the (sub)sequence,
             try every mask length p in [m, n] starting at that base, producing
             (n - m + 1) overlapping variants per base (e.g. m=1, n=8 gives 8
@@ -297,6 +299,11 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
         the delta of the donor/acceptor score at the exon boundaries caused by
         masking that interval, and the original bases it replaced.
         """
+        if window_size is not None and all_window_size is not None:
+            raise ValueError("window_size and all_window_size are mutually exclusive; pass only one")
+        if window_size is None and all_window_size is None:
+            window_size = 5
+
         #const
         sequence = self.sequence[interval[0] : interval[1]].upper() if interval is not None else self.sequence.upper()
         sequence_lenght = len(sequence)
@@ -330,7 +337,7 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             print(f"\n batch # {i//batch_size} / {len(windows)//batch_size +1}")
             batch_keys = windows[i:i+batch_size]
             batch = [troncated_sequences[key] for key in batch_keys]
-            #proba run
+            # proba run
             batch_probas = my_model.run_batches(batch, models_used=models_used)
             for key, value in zip(batch_keys, batch_probas):
                 window_scores[key] = {
@@ -338,7 +345,6 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
                     "acceptor": value[exon[0]][1] - baseprob_acceptor,
                     "subsequence": sequence[key[0]:key[1]],
                 }
-
         return window_scores
 
 

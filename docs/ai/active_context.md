@@ -2,7 +2,11 @@
 
 ## Current Objectives
 
-Task 21 (`hight_impact_mutation_position()` fixes) is implementation-complete, pending `[JUDGE]` review — see `docs/ai/progress.md` under Task 21 for full detail. Next action: a `[JUDGE]` session should verify Task 21, then a `[WORKER]` session can start Task 22 (blocked by Task 21).
+**Task 24** (`rubber_window()` fixes, Rubber Window Analysis Block batch) is `[DONE]` — independently verified by `[JUDGE]` 2026-07-27, see `docs/ai/progress.md` under Task 24. Next unblocked task in that batch is **Task 25** (`POST /analysis/rubberwindow` endpoint) — the batch's originally-planned progress-mechanism design task was dropped per user decision, so Task 25 is now the endpoint and Task 26 the frontend Pipeline block.
+
+**Task 21** (`hight_impact_mutation_position()` fixes, separate batch) was reopened `[FAILED]` by the same `[JUDGE]` pass 2026-07-27 — a regression introduced after this Worker session's 2026-07-17 fixes (return shape changed again, breaking its own tests and crashing the already-committed `POST /analysis/highimpactposition` endpoint), plus an independent lowercase-input crash. Full root cause and fix instructions in `docs/ai/progress.md` under Task 21 and `docs/ai/audits_history.md` → "Judge Review — Task 24 (Rubber Window batch), 2026-07-27". Needs a `[WORKER]` re-attempt before Task 22/23 can proceed.
+
+Next action: a `[WORKER]` session can pick up either Task 21 (fix the regression, blocking Task 22/23) or Task 25 (independent batch) — both are unblocked and available.
 
 ## Previous Objectives (superseded)
 

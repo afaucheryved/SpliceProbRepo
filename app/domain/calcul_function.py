@@ -27,7 +27,7 @@ class IsValid:
         """
         Verifies the sequence syntaxe
         """
-        return bool(re.match(r"^[ACGTacgt]+$", sequence))
+        return bool(re.match(r"^[ACGTNacgtn]+$", sequence))
 
 class Scoring:
     """

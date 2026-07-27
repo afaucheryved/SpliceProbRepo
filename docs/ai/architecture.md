@@ -132,6 +132,7 @@ SpliceProbRepo/
 | `/altbypattern/delet` | POST | `alteration_bypattern_router.py` | Delete by pattern (regex-based) |
 | `/mutateindependently` | POST | `alteration_radom.py` | Mutate each base independently by probability matrix |
 | `/analysis/patterninzona` | POST | `analysis_router.py` | Find most impactful windowed mutations in zones of interest |
+| `/analysis/rubberwindow` | POST | `analysis_router.py` | Slide masked ("N"-filled) windows across a sequence and measure the donor/acceptor score shift at a given exon's boundaries. Two mutually exclusive tiling modes (`window_size` fixed tiling, or `all_window_size=(m,n)` overlapping per-base tiling) — see `SpotPositionFunctions.rubber_window()`'s docstring. Response keys are `"{start}_{end}"` strings (not the domain layer's `(start, end)` tuples, which aren't valid JSON object keys). |
 
 ### 3. Session Management
 
@@ -529,3 +530,4 @@ entry gets the run's `operations` Map for `SequenceOutput`'s hover titles).
 3. **Spelling inconsistency**: `app/schemas/independant_gv_schema.py` uses the French spelling "independant" vs "independent" used elsewhere.
 4. **Third-party incompatibility patched locally**: `spliceai.utils.one_hot_encode()` (installed package) calls a NumPy binary-mode API that NumPy 2.x removed. `app/domain/spliceai_calculation.py` now defines a local, output-identical `one_hot_encode()` instead of importing the upstream one — if `spliceai` is ever upgraded to a NumPy-2-compatible release, this local shim could be removed.
 5. **`/analysis/patterninzona` reliability**: endpoint returns 200 with real output in smoke testing (`test_payloads.py`), but has been flagged as not fully reliable/operational in all cases — not yet root-caused. See `docs/ai/progress.md`.
+6. **`/analysis/rubberwindow` latency**: `all_window_size` mode's overlapping tiling can produce far more windows than a fixed `window_size` sweep. Measured live against the real 5-model ensemble: a 200bp sequence with `all_window_size=[4,8]` (678 windows, `batch_size=50`, ~14 batches) took ~206s end-to-end. Scale roughly linearly with window count for longer sequences or wider `all_window_size` ranges — there is no timeout, background job, or sequence-length cap (intentionally not added speculatively), so a caller should keep `all_window_size` ranges and sequence length modest, or use `interval` to scope the analysis to a sub-region, until a real usage pattern justifies more.

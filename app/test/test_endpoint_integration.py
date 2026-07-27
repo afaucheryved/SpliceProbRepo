@@ -520,3 +520,73 @@ class TestAnalysis:
                 "/analysis/highimpactposition",
                 json={"base": 1, "interval": [5, 10], "session_id": sid},
             )
+
+    @pytest.mark.asyncio
+    async def test_rubberwindow_fixed_window_size(self, async_client):
+        sequence = "atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcga"
+        create_payload = {
+            "name": "rubber_window_test",
+            "sequence": sequence,
+            "mutations": [],
+            "session_id": None,
+        }
+        create_resp = await async_client.post("/resetgv", json=create_payload)
+        sid = create_resp.json()["session_id"]
+
+        resp = await async_client.post(
+            "/analysis/rubberwindow",
+            json={"exon": [5, 10], "window_size": 5, "session_id": sid},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == (len(sequence) + 4) // 5  # non-overlapping tiling of a fixed 5-base window
+        for key, value in data.items():
+            assert "_" in key  # "start_end" JSON-safe key, not a tuple
+            assert set(value.keys()) == {"donor", "acceptor", "subsequence"}
+            assert isinstance(value["donor"], float)
+            assert isinstance(value["acceptor"], float)
+            assert isinstance(value["subsequence"], str)
+
+    @pytest.mark.asyncio
+    async def test_rubberwindow_all_window_size(self, async_client):
+        sequence = "atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcga"
+        create_payload = {
+            "name": "rubber_window_test_all",
+            "sequence": sequence,
+            "mutations": [],
+            "session_id": None,
+        }
+        create_resp = await async_client.post("/resetgv", json=create_payload)
+        sid = create_resp.json()["session_id"]
+
+        resp = await async_client.post(
+            "/analysis/rubberwindow",
+            json={"exon": [5, 10], "all_window_size": [2, 3], "session_id": sid},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) > len(sequence)  # overlapping tiling produces more windows than positions
+
+    @pytest.mark.asyncio
+    async def test_rubberwindow_both_tiling_modes_raises(self, async_client):
+        create_payload = {
+            "name": "rubber_window_test_conflict",
+            "sequence": "atcgatcgatcgatcgatcgatcgatcgatcgatcgatcgatcga",
+            "mutations": [],
+            "session_id": None,
+        }
+        create_resp = await async_client.post("/resetgv", json=create_payload)
+        sid = create_resp.json()["session_id"]
+
+        # Same propagation reasoning as test_high_impact_position_interval_out_of_range_base
+        # above -- a domain-layer ValueError surfaces as a raised Exception, not a 422/500.
+        with pytest.raises(Exception, match="mutually exclusive"):
+            await async_client.post(
+                "/analysis/rubberwindow",
+                json={
+                    "exon": [5, 10],
+                    "window_size": 5,
+                    "all_window_size": [2, 3],
+                    "session_id": sid,
+                },
+            )

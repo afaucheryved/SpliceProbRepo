@@ -2,11 +2,11 @@
 
 ## Current Objectives
 
-**Task 24** (`rubber_window()` fixes, Rubber Window Analysis Block batch) is `[DONE]` — independently verified by `[JUDGE]` 2026-07-27, see `docs/ai/progress.md` under Task 24. Next unblocked task in that batch is **Task 25** (`POST /analysis/rubberwindow` endpoint) — the batch's originally-planned progress-mechanism design task was dropped per user decision, so Task 25 is now the endpoint and Task 26 the frontend Pipeline block.
+**Task 25** (`POST /analysis/rubberwindow` endpoint, Rubber Window Analysis Block batch) is `[DONE]` — independently verified by `[JUDGE]` 2026-07-27 (including 3 cases the Worker hadn't tested: explicit `batch_size`, default tiling, `interval` end-to-end), see `docs/ai/progress.md` under Task 25. Tasks 24 and 25 in this batch are both `[DONE]`. Next unblocked task is **Task 26** (frontend Pipeline block + output chart), blocked by Task 25.
 
-**Task 21** (`hight_impact_mutation_position()` fixes, separate batch) was reopened `[FAILED]` by the same `[JUDGE]` pass 2026-07-27 — a regression introduced after this Worker session's 2026-07-17 fixes (return shape changed again, breaking its own tests and crashing the already-committed `POST /analysis/highimpactposition` endpoint), plus an independent lowercase-input crash. Full root cause and fix instructions in `docs/ai/progress.md` under Task 21 and `docs/ai/audits_history.md` → "Judge Review — Task 24 (Rubber Window batch), 2026-07-27". Needs a `[WORKER]` re-attempt before Task 22/23 can proceed.
+**Task 21** (`hight_impact_mutation_position()` fixes, separate batch) is still reopened `[FAILED]` from the 2026-07-27 `[JUDGE]` pass — a regression changed its return shape after this Worker session's 2026-07-17 fixes, breaking its own tests and crashing the already-committed `POST /analysis/highimpactposition` endpoint, plus an independent lowercase-input crash. Full root cause and fix instructions in `docs/ai/progress.md` under Task 21 and `docs/ai/audits_history.md` → "Judge Review — Task 24 (Rubber Window batch), 2026-07-27". Not touched this session (different batch) — still needs a `[WORKER]` re-attempt before Task 22/23 can proceed.
 
-Next action: a `[WORKER]` session can pick up either Task 21 (fix the regression, blocking Task 22/23) or Task 25 (independent batch) — both are unblocked and available.
+Next action: a `[WORKER]` session can pick up either Task 26 (frontend Pipeline block, this batch) or Task 21's fix (separate batch, blocking Task 22/23) — both are unblocked and available.
 
 ## Previous Objectives (superseded)
 

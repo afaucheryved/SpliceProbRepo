@@ -224,3 +224,17 @@ Not part of Task 24's own diff, but discovered because the Worker's note for Tas
 ### Verdict
 - **Task 24 — `[DONE]`**
 - **Task 21 — reopened `[FAILED]`** (was never actually marked `[DONE]` by any prior Judge session, but its Worker-verified state from 2026-07-17 no longer matches the code) — root cause and fix instructions above, routed back to `[WORKER]`. Task 22's already-written endpoint code does not need re-writing, just re-verifying once Task 21's fix lands — same for Task 23 once Task 22 is confirmed working.
+
+## Judge Review — Task 25 (Rubber Window batch), 2026-07-27
+
+### Task 25 — `[DONE]`, independently verified
+
+Reviewed `POST /analysis/rubberwindow` (`app/router/analysis_router.py`) directly: parameter forwarding to `rubber_window()`, the `batch_size`-only-when-supplied conditional kwarg (needed since `rubber_window()`'s own signature has no `None` handling for `batch_size`, unlike its other optional parameters), the `(start, end)` tuple → `"start_end"` string key flattening, and `numpy.float32` → native `float` casting are all correct. Confirmed passing Python `list`s where the domain layer's type hints say `tuple` is safe by reading both `rubber_window()` (indexing/unpacking, e.g. `m, n = all_window_size`, works identically on lists) and `spliceai_calculation.py`'s `models_used` handling (`set(models_used_id).issubset(...)`, `in` membership checks — both list-safe), matching how `/highimpactposition` already does the same thing.
+
+**Independent re-verification, not just re-running the Worker's own tests:**
+- Re-ran the 3 new `test_endpoint_integration.py::TestAnalysis` tests directly — all pass.
+- Full suite (`pytest app/test/ --ignore=app/test/test_functions.py`) re-run directly — 46 failed / 56 passed, identical to the Worker's report (same 46 pre-existing failures, the 3 new tests are the only delta).
+- **Constructed and ran 3 cases the Worker's own tests never exercised, all against the live HTTP endpoint** (monkeypatched model, real request/response cycle): (1) an explicit `batch_size` in the request body — none of the Worker's 3 tests ever passed this field, so the conditional-kwargs branch was previously untested; confirmed it's correctly forwarded (`batch_size=2` on a 9-window case still returns all 9 windows, status 200). (2) The default tiling mode — neither `window_size` nor `all_window_size` supplied; confirmed the domain layer's internal `window_size=5` default is correctly reached end-to-end (a 45bp sequence produced exactly 9 = `ceil(45/5)` windows). (3) `interval` through the live endpoint (not just the domain-layer-only test from the Task 24 review) — confirmed the returned windows' concatenated `subsequence` values exactly reconstruct `self.sequence[interval[0]:interval[1]]` (`interval=[3,20]` on a 45bp sequence → windows' subsequences concatenate to the expected 17-character sub-slice, case-normalized). No bugs found in any of the three.
+- The `~206s` real-model latency figure now in `architecture.md` was directly observed by this same session (this Judge and the Worker who measured it are the same continuous session) — not re-run a second time, since repeating an expensive real-model call for no new information isn't a good use of the budget; treated as already independently witnessed rather than merely trusted from a report.
+
+No regressions, no unaddressed points. **Task 25 is `[DONE]`.** Task 21 (separate batch) remains reopened `[FAILED]` from the prior pass above — not touched this session.

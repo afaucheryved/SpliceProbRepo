@@ -191,6 +191,100 @@ function DeltaOutput({ data, sequence }) {
   `;
 }
 
+// rubber_window()'s response is keyed by "{start}_{end}" strings (flattened
+// server-side from the domain layer's (start, end) tuple keys -- see
+// analysis_router.py) mapping to {donor, acceptor, subsequence}. This shape
+// doesn't fit flattenProbaTrack()/flattenDeltaTrack() (those expect a
+// {index: {base: value}} dict keyed by single positions, not window ranges),
+// so it's mapped directly here, the same reasoning already applied to
+// hight_impact_mutation_position()'s flat per-base-array response.
+function RubberWindowOutput({ data }) {
+  const theme = useTheme();
+  const colors = seriesColors(theme);
+  const windows = Object.entries(data ?? {})
+    .map(([key, value]) => {
+      const [start, end] = key.split("_").map(Number);
+      return { start, end, ...value };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  if (windows.length === 0) {
+    return html`<p class="output-panel__hint">No windows produced — check the exon/interval/window settings.</p>`;
+  }
+
+  // 1-based labels, matching every other chart's convention. Overlapping
+  // (all_window_size) mode can repeat the same start across several windows
+  // of different lengths -- each still gets its own bar/point, in start
+  // (then end) order.
+  const labels = windows.map((w) => w.start + 1);
+  const donorValues = windows.map((w) => w.donor);
+  const acceptorValues = windows.map((w) => w.acceptor);
+
+  // Per-point tooltip showing the exact masked window(s) and the
+  // subsequence they replaced (mirroring how SequenceTrack.js/other charts
+  // surface per-point sequence text). Chart.js's shared bar-chart pipeline
+  // (aggregateBarSeries, Chart.js) compresses series past 500 points into
+  // synthetic buckets and only guarantees the rendered *label* stays
+  // meaningful post-aggregation (see Chart.js's own comment on this) -- not
+  // a stable index into this component's pre-aggregation `windows` array.
+  // rubber_window()'s all_window_size mode routinely produces >500 windows
+  // (a 200bp sequence with all_window_size=[4,8] already yields ~680), so
+  // this isn't a rare edge case: look the window(s) up by the label Chart.js
+  // actually rendered at that point, not by the raw tooltip dataIndex.
+  const windowsByLabel = new Map();
+  windows.forEach((w) => {
+    const label = w.start + 1;
+    const list = windowsByLabel.get(label) ?? [];
+    list.push(w);
+    windowsByLabel.set(label, list);
+  });
+  const tooltipFooter = (items) => {
+    if (!items.length) return [];
+    const label = items[0].chart.data.labels[items[0].dataIndex];
+    return (windowsByLabel.get(label) ?? []).map((w) => `[${w.start}, ${w.end}): ${w.subsequence}`);
+  };
+
+  return html`
+    <div>
+      <p class="output-panel__hint">
+        Donor/acceptor score delta caused by masking each sliding window with "N"s. Hover a bar for the exact window and the sequence it replaced.
+      </p>
+      <${Chart}
+        type="bar"
+        height=${160}
+        labels=${labels}
+        datasets=${[
+          {
+            label: "Δ donor",
+            data: donorValues,
+            backgroundColor: deltaBarColors(donorValues, colors),
+          },
+        ]}
+        options=${{
+          scales: { x: { title: { display: true, text: "Window start position" } }, y: { title: { display: true, text: "Δ donor probability" } } },
+          plugins: { tooltip: { callbacks: { footer: tooltipFooter } } },
+        }}
+      />
+      <${Chart}
+        type="bar"
+        height=${160}
+        labels=${labels}
+        datasets=${[
+          {
+            label: "Δ acceptor",
+            data: acceptorValues,
+            backgroundColor: deltaBarColors(acceptorValues, colors),
+          },
+        ]}
+        options=${{
+          scales: { x: { title: { display: true, text: "Window start position" } }, y: { title: { display: true, text: "Δ acceptor probability" } } },
+          plugins: { tooltip: { callbacks: { footer: tooltipFooter } } },
+        }}
+      />
+    </div>
+  `;
+}
+
 function ZonesOutput({ data }) {
   const rows = Object.entries(data ?? {})
     .map(([key, score]) => ({ pattern: parseZoneKey(key), score }))
@@ -227,6 +321,7 @@ export function OutputPanel({ result }) {
       ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} params=${r.params} />` : null}
       ${kind === "delta" ? html`<${DeltaOutput} data=${data} sequence=${seq} />` : null}
       ${kind === "zones" ? html`<${ZonesOutput} data=${data} />` : null}
+      ${kind === "rubberWindow" ? html`<${RubberWindowOutput} data=${data} />` : null}
     `;
   }
 

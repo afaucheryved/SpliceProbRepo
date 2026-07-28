@@ -195,6 +195,61 @@ export const BLOCK_DEFINITIONS = [
     outputKind: "zones",
     run: (params) => workspace.analyzeZones(params),
   },
+  {
+    id: "rubber_window",
+    category: "Analysis",
+    label: "Rubber Window",
+    summary:
+      'Slide masked ("N"-filled) windows across the sequence and measure the donor/acceptor score shift at the exon\'s boundaries. Uses either the fixed window size OR the overlapping min/max range below — not both (the range takes priority if both are set).',
+    fields: [
+      { key: "exonStart", label: "Exon start (0-based)", type: "int", default: 0 },
+      { key: "exonEnd", label: "Exon end (0-based)", type: "int", default: 10 },
+      {
+        key: "intervalStart",
+        label: "Interval start (optional)",
+        type: "int",
+        default: null,
+      },
+      {
+        key: "intervalEnd",
+        label: "Interval end (optional)",
+        type: "int",
+        default: null,
+      },
+      { key: "window_size", label: "Fixed window size", type: "int", default: 5 },
+      {
+        key: "allWindowMin",
+        label: "Overlapping range: min length (optional)",
+        type: "int",
+        default: null,
+      },
+      {
+        key: "allWindowMax",
+        label: "Overlapping range: max length (optional)",
+        type: "int",
+        default: null,
+      },
+      { key: "batch_size", label: "Batch size", type: "int", default: 50 },
+      { key: "models_used", label: "SpliceAI models used", type: "modelSet", default: [5] },
+    ],
+    outputKind: "rubberWindow",
+    run: (params) => {
+      const hasInterval = params.intervalStart != null && params.intervalEnd != null;
+      const hasAllWindow = params.allWindowMin != null && params.allWindowMax != null;
+      return workspace.rubberWindow({
+        exon: [params.exonStart, params.exonEnd],
+        interval: hasInterval ? [params.intervalStart, params.intervalEnd] : null,
+        // hasAllWindow takes priority over the fixed window_size default so
+        // filling in both range fields doesn't hit the backend's
+        // mutually-exclusive-parameters error just because window_size still
+        // carries its own default.
+        window_size: hasAllWindow ? null : params.window_size,
+        all_window_size: hasAllWindow ? [params.allWindowMin, params.allWindowMax] : null,
+        batch_size: params.batch_size,
+        models_used: params.models_used,
+      });
+    },
+  },
 ];
 
 export function blockById(id) {

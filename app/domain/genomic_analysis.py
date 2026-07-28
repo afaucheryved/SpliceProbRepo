@@ -274,7 +274,7 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             
         return output
 
-    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int | None = None, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int, int] | None = None)-> JSON:
+    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int | None = None, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int] | None = None)-> JSON:
 
         """
         Mask sliding intervals of the sequence with 'N's -- the exon/intron boundary
@@ -314,9 +314,9 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
         troncated_sequences: dict[tuple[int, int], str] = {}
 
         if all_window_size is not None:
-            m, n = all_window_size
+            #m, n = all_window_size
             for start in range(sequence_lenght):
-                for p in range(m, n + 1):
+                for p in all_window_size:#range(m, n + 1)
                     end = min(start + p, sequence_lenght)
                     if end <= start:
                         continue

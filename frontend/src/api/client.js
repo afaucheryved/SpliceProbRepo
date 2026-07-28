@@ -122,6 +122,9 @@ export const api = {
   analysis: {
     // { step?, penality?, threshold?, specified_models_used?, session_id? } -> { "(mut,...)": score }
     patternInZona: (payload) => request("POST", "/analysis/patterninzona", payload),
+    // { exon, interval?, window_size?, all_window_size?, models_used?, batch_size?, session_id? }
+    // -> { "start_end": { donor, acceptor, subsequence } }
+    rubberWindow: (payload) => request("POST", "/analysis/rubberwindow", payload),
   },
 
   ensembl: {

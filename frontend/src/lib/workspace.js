@@ -258,6 +258,16 @@ export const workspace = {
     });
   },
 
+  async rubberWindow(params = {}) {
+    const sessionId = requireSession();
+    return withBusy(async () => {
+      const data = await api.analysis.rubberWindow({ ...params, session_id: sessionId });
+      setState({ lastResult: { type: "rubberWindow", data } });
+      pushHistory("probe", "Rubber window analysis");
+      return data;
+    });
+  },
+
   clearError() {
     setState({ lastError: null });
   },

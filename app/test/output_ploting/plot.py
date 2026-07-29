@@ -23,8 +23,8 @@ ROW_HEIGHT = 2.4  # tall enough to fit the boundary numbers + subsequence label 
 GROUP_GAP_ROWS = 1  # empty rows separating the donor block from the acceptor block
 BOUNDARY_LABEL_GAP_FRACTION = 0.006  # gap between a bracket line and its number, as a fraction of the sequence length
 ##tempo, delet
-baseprob_donor = 0.0385
-baseprob_acceptor = 0.954
+#baseprob_donor = 0.87
+#baseprob_acceptor = 0.096
 ##
 
 
@@ -53,8 +53,8 @@ def parse_output_file(path: Path) -> tuple[int, tuple[int, int] | None, dict[tup
         values = ast.literal_eval(dict_str)
         entries[(int(start), int(end))] = values
         ## ponderation, delet
-        values["donor"]/=baseprob_donor
-        values["acceptor"]/=baseprob_acceptor
+        #values["donor"]/=baseprob_donor
+        #values["acceptor"]/=baseprob_acceptor
         ##
     return sequence_length, exon, entries
 
@@ -161,8 +161,8 @@ def write_segments_txt(donor_segments: list[dict], acceptor_segments: list[dict]
 def main() -> None:
     sequence_length, exon, entries = parse_output_file(INPUT_FILE)
 
-    donor_segments = build_segments(entries, "donor", n=10)
-    acceptor_segments = build_segments(entries, "acceptor", n=10)
+    donor_segments = build_segments(entries, "donor", n=5)
+    acceptor_segments = build_segments(entries, "acceptor", n=5)
 
     plot_combined(donor_segments, acceptor_segments, sequence_length, exon, OUTPUT_FILE)
     write_segments_txt(donor_segments, acceptor_segments, sequence_length, ANALYSIS_FILE)

@@ -19,7 +19,7 @@ from app.domain.genomic_analysis import ImportanceSplicingSearch, SpotPositionFu
 from app.domain.spliceai_calculation import one_hot_encoder
 from app.domain.initialization.initalize_my_model import my_model
 from app.domain.initialization.initialize_internal_gv import my_internal_genetic_variant
-from app.test.global_var import parameters_1_1, parameters_1_2, parameters_3, parameters_2, parameters_3_juste, parameters_test_1, parameter_test_2, parameter_test_sequ3
+from app.test.global_var import parameters_1_1, parameters_1_2, parameters_3, parameters_2, parameters_3_juste, parameters_test_1, parameter_test_sequ3
 
 #test tools
 def print_dic_lisible(func):
@@ -250,10 +250,10 @@ def write_in_file(func):
 # test
 
 #@write_in_file
-def test_rubber_window(sequence, exon, batch_size, all_window_size):
+def test_rubber_window(sequence, exon, batch_size, all_window_size, first_search_window_size, first_search_step):
     my_internal_genetic_variant.sequence = sequence
     print("sequence lenght", len(sequence))
-    return my_internal_genetic_variant.rubber_window(exon=exon, batch_size=batch_size, all_window_size=all_window_size) # (897, 947) or (31, 102) or (7300, 7371)
+    return my_internal_genetic_variant.rubber_window(exon=exon, batch_size=batch_size, all_window_size=all_window_size, first_search_window_size=first_search_window_size, first_search_step=first_search_step) # (897, 947) or (31, 102) or (7300, 7371)
 
-print(test_rubber_window(**parameter_test_sequ3))
+print(test_rubber_window(**parameters_test_1))
 

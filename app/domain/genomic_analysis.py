@@ -274,7 +274,112 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             
         return output
 
-    def rubber_window(self, exon: tuple[int, int], interval: tuple[int, int] | None = None, window_size: int | None = None, models_used: tuple[int] | None = None, batch_size: int = 50, all_window_size: tuple[int] | None = None)-> JSON:
+    def _zona(sequence: genome,
+              exon: tuple[int, int],
+              window_size: int = 20,
+              step: int = 10,
+              keep_prop: percentage = 20,
+              batch_size: int = 50,
+              models_used: tuple[int] | None = None,
+              search_activator_repressor: str = "repressor")-> list[tuple[int, int]]:
+        """
+        Defines the boundaries of the so-called "intervals of importance,"
+        or regions where regulatory motifs are potentially present.
+        Then, 'rubber_window()' operates on these zones.
+
+        Each zone gets both a donor score and an acceptor score. The two are
+        sorted and cut down to the top <keep_prop>% independently (so strong
+        donor zones can't crowd out interesting acceptor zones); within each
+        type, zones overlapping by more than 50% are deduplicated, keeping
+        the largest -- then, if tied, the highest scoring -- of the group.
+        The kept donor and acceptor zones are then merged: any that still
+        overlap (across or within types) are fused into a single spanning
+        zone, e.g. [(10, 30), (20, 50)] -> [(10, 50)].
+
+        `search_activator_repressor` selects which direction of shift counts as
+        score: "repressor" (default) keeps only zones whose masking *raises* the
+        donor/acceptor score (i.e. an inhibitory motif was removed); "activator"
+        keeps only zones whose masking *lowers* it (an enhancer motif was removed).
+        Zones that moved the wrong way for the requested mode score 0.
+        """
+        if search_activator_repressor not in ("activator", "repressor"):
+            raise ValueError(f"search_activator_repressor can only take the value 'activator' or 'repressor', not {search_activator_repressor}.")
+
+        baseprob_donor = my_model.get_single_base_score(sequence=sequence, position=exon[1], models_used=models_used)[2]
+        baseprob_acceptor = my_model.get_single_base_score(sequence=sequence, position=exon[0], models_used=models_used)[1]
+
+        # same batching pattern as rubber_window(): build all masked variants up front,
+        # then score them 'batch_size' at a time with a single run_batches() call each,
+        # instead of one get_single_base_score() call per window.
+        troncated_sequences: dict[tuple[int, int], str] = {}
+        for base in range(0, len(sequence)-1, step):
+            end = min(len(sequence)-1, base+window_size)
+            troncated_sequences[(base, end)] = sequence[:base] + "N"*(end-base) + sequence[end:]
+
+        intervals: dict[tuple[float, float], tuple[int, int]] = {}
+        windows = list(troncated_sequences.keys())
+        for i in range(0, len(windows), batch_size):
+            batch_keys = windows[i:i+batch_size]
+            batch = [troncated_sequences[key] for key in batch_keys]
+            batch_probas = my_model.run_batches(batch, models_used=models_used)
+            for (base, end), value in zip(batch_keys, batch_probas):
+                # signed, baseline-normalized -- masking a repressor lifts the score
+                # (positive delta), masking an activator drops it (negative delta).
+                if search_activator_repressor == "repressor":
+                    donor_delta = value[exon[1]][2]/baseprob_donor
+                    acceptor_delta = value[exon[0]][1]/baseprob_acceptor
+                else:
+                    donor_delta = baseprob_donor/value[exon[1]][2]
+                    acceptor_delta = baseprob_acceptor/value[exon[0]][1]
+                intervals[(donor_delta, acceptor_delta)] = (base, end)
+
+        def overlap_ratio(a: tuple[int, int], b: tuple[int, int]) -> float:
+            overlap = max(0, min(a[1], b[1]) - max(a[0], b[0]))
+            return overlap / min(a[1] - a[0], b[1] - b[0])
+
+        def merge_overlapping(zones: list[tuple[int, int]]) -> list[tuple[int, int]]:
+            merged: list[tuple[int, int]] = []
+            for start, end in sorted(zones):
+                if merged and start <= merged[-1][1]:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                else:
+                    merged.append((start, end))
+            return merged
+
+        def dedup_and_keep_top(scored_zones: list[tuple[float, tuple[int, int]]]) -> list[tuple[int, int]]:
+            # largest zone first, ties broken by score -- so the zone to keep from an
+            # overlapping group is always examined before the ones it eliminates
+            scored_zones = sorted(scored_zones, key=lambda item: (item[1][1] - item[1][0], item[0]), reverse=True)
+            kept: list[tuple[int, int]] = []
+            limit = int(len(sequence) * keep_prop / 100)
+            sum_zone = 0
+            for _, zone in scored_zones:
+                if any(overlap_ratio(zone, k) > 0.5 for k in kept):
+                    continue
+                if sum_zone >= limit: return kept
+                sum_zone+=zone[1]-zone[0]
+                kept.append(zone)
+            return kept
+
+        donor_zones = dedup_and_keep_top([(donor_score, zone) for (donor_score, _), zone in intervals.items()])
+        acceptor_zones = dedup_and_keep_top([(acceptor_score, zone) for (_, acceptor_score), zone in intervals.items()])
+
+        output = merge_overlapping(donor_zones + acceptor_zones) # union, overlapping zones merged
+        print(output)
+        return output
+        
+
+    def rubber_window(self, exon: tuple[int, int],
+                       interval: tuple[int, int] | None = None,
+                         window_size: int | None = None,
+                           models_used: tuple[int] | None = None,
+                             batch_size: int = 50,
+                               all_window_size: tuple[int] | None = None, 
+                               first_search_window_size: int = 20,
+                               first_search_step: int = 10,
+                               keep_prop: percentage = 30,
+                               top_more_relevent: int = 10,
+                               search_activator_repressor: str = "repressor")-> JSON:
 
         """
         Mask sliding intervals of the sequence with 'N's -- the exon/intron boundary
@@ -298,25 +403,35 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
         interval, each mapping to {"donor": float, "acceptor": float, "subsequence": str} :
         the delta of the donor/acceptor score at the exon boundaries caused by
         masking that interval, and the original bases it replaced.
+
+        `search_activator_repressor` selects which direction of shift counts as a
+        hit: "repressor" (default) keeps only windows whose masking *raises* the
+        donor/acceptor score (an inhibitory motif was removed); "activator" keeps
+        only windows whose masking *lowers* it (an enhancer motif was removed).
         """
         if window_size is not None and all_window_size is not None:
             raise ValueError("window_size and all_window_size are mutually exclusive; pass only one")
         if window_size is None and all_window_size is None:
             window_size = 5
+        if search_activator_repressor not in ("activator", "repressor"):
+            raise ValueError(f"search_activator_repressor can only take the value 'activator' or 'repressor', not {search_activator_repressor}.")
 
         #const
         sequence = self.sequence[interval[0] : interval[1]].upper() if interval is not None else self.sequence.upper()
         sequence_lenght = len(sequence)
         baseprob_donor = my_model.get_single_base_score(sequence=self.sequence, position=exon[1], models_used=models_used)[2]
         baseprob_acceptor = my_model.get_single_base_score(sequence=self.sequence, position=exon[0], models_used=models_used)[1]
+        working_zona = SpotPositionFunctions._zona(sequence=sequence, exon=exon, keep_prop=keep_prop, batch_size=batch_size, models_used=models_used, step=first_search_step, window_size=first_search_window_size)
 
         #var
         troncated_sequences: dict[tuple[int, int], str] = {}
 
         if all_window_size is not None:
             #m, n = all_window_size
-            for start in range(sequence_lenght):
-                for p in all_window_size:#range(m, n + 1)
+            working_bases = [element for innerList in [[n for n in range(a,b)] for (a,b) in working_zona] for element in innerList] # to one dimension + bases.
+            print(working_bases)
+            for start in working_bases:
+                for p in all_window_size: # range(m, n + 1)
                     end = min(start + p, sequence_lenght)
                     if end <= start:
                         continue
@@ -340,12 +455,34 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
             # proba run
             batch_probas = my_model.run_batches(batch, models_used=models_used)
             for key, value in zip(batch_keys, batch_probas):
-                window_scores[key] = {
-                    "donor": value[exon[1]][2] - baseprob_donor,
-                    "acceptor": value[exon[0]][1] - baseprob_acceptor,
-                    "subsequence": sequence[key[0]:key[1]],
+                if search_activator_repressor == "repressor":
+                    window_scores[key] = {
+                        "donor": value[exon[1]][2]/baseprob_donor,
+                        "acceptor": value[exon[0]][1]/baseprob_acceptor,
+                        "subsequence": sequence[key[0]:key[1]],
+                    }
+                else:
+                    window_scores[key] = {
+                        "donor": baseprob_donor/value[exon[1]][2],
+                        "acceptor": baseprob_acceptor/value[exon[0]][1],
+                        "subsequence": sequence[key[0]:key[1]],
+                    }
+        # return only the more relevants (only in final version, use 'return window_scores' for backend test instead)
+        build_segments: list[dict] = []
+        for k in ("donor", "acceptor"):
+            top_n_by_impact = sorted(window_scores.items(), key=lambda item: abs(item[1][k]), reverse=True)[:top_more_relevent]
+            build_segments.append([
+                {
+                    "start": start,
+                    "end": end,
+                    "value": values[k],
+                    "subsequence": values["subsequence"],
+                    "type": k,
                 }
-        return window_scores
+                for (start, end), values in top_n_by_impact
+                ])
+        output = {"analysis": build_segments, "sequence lenght": sequence_lenght, "exon": exon}
+        return output
 
 
 

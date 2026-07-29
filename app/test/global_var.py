@@ -120,6 +120,8 @@ GCAGACTTTTTTTTATTGTGATATGGGATAACCTAGGCATA""".replace("\n", ""),
     "exon": (572-1, 677-1),
     "batch_size": 20,
     "window_size": 5,
+    "first_search_step": 10,
+    "first_search_window_size": 20,
     
 }
 parameters_1_2 = {
@@ -221,6 +223,8 @@ GCAGACTTTTTTTTATTGTGATATGGGATAACCTAGGCATA""".replace("\n", ""),
     "exon": (1158-1, 1278-1),
     "batch_size": 20,
     "window_size": 5,
+    "first_search_step": 10,
+    "first_search_window_size": 20,
     
 }
 parameters_2 = {
@@ -266,7 +270,9 @@ GTACACATTCACATTCACAATATAGTTATGGATATGGATGTATATAAATATATGTAAATACTACATATATG
 TACCTAAAATTTGTTTTACTTCTGCTTTAAAAAAAGTAATTATAGCCACATTTTT""".replace("\n", ""),
     "exon": (1263-1, 1495-1),
     "batch_size": 30,
-    "all_window_size": [4,8],
+    "all_window_size": [4,6,8,10],
+    "first_search_step": 10,
+    "first_search_window_size": 20,
 }
 parameters_3 = {
     "sequence": """TCAGGGTCATCTAATTATTTAGGAAATGCAAGCAGCTTCCCTTAGATGGCACGTTGGTGGTAGCTGTAT
@@ -283,6 +289,8 @@ GAGATCAGGAGGCCCCTGGAGAGGCGTGTTTGGGGATGAGGGTGTCCTGTTTGGCTCG""".replace("\n", ""),
     "exon": (236-1, 307-1),
     "batch_size": 40,
     "window_size": 3,
+    "first_search_step": 10,
+    "first_search_window_size": 20,
 }
 
 parameters_3_juste = {
@@ -327,13 +335,17 @@ GATTTTGAGATAATTCTACACAGAGTGGAATGGGCAACCCTTCTGTTTTTTGCAGCGCTC
     "exon": (82-1, 88-1), # (1200-1, 1274-1)
     "batch_size": 40,
     "window_size": 30,
+    "first_search_step": 10,
+    "first_search_window_size": 20,
 }
 
 parameters_test_1 = {
     "sequence": 'TGCTTCTTTCCAGATCGTGCACAGAACTCTGGCAGCCATGCTGGGTTCCCTTGCAGCACTGGCAGCACTGGCTGTGATTGGCGATGTAAGTTGTCACAGT',
     "exon": (14-1, 85-1), # (1200-1, 1274-1)
     "batch_size": 40,
-    "all_window_size": [4, 12],
+    "all_window_size": [5,7,10],
+    "first_search_step": 10,
+    "first_search_window_size": 20,
 }
 
 parameter_test_sequ3 = {
@@ -350,5 +362,7 @@ ACTAGAGGGGACCGTCCTAGCTGGTGCAGAAAGGTGGGAGTCAGTTGGGCCAGGGTCTGTCCTGAA
 GAGATCAGGAGGCCCCTGGAGAGGCGTGTTTGGGGATGAGGGTGTCCTGTTTGGCTCG""".replace("\n", ""),
     "exon": (236-1, 307-1),
     "batch_size": 30,
-    "all_window_size": [10,5]
+    "all_window_size": [10,5],
+    "first_search_step": 10,
+    "first_search_window_size": 20,
 }

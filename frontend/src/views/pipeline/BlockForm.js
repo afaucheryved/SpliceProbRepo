@@ -193,6 +193,34 @@ function Matrix4x4Field({ field, value, onChange }) {
   `;
 }
 
+function IntListField({ field, value, onChange }) {
+  const items = value ?? [];
+  const update = (i, v) => onChange(items.map((x, idx) => (idx === i ? v : x)));
+  const add = () => onChange([...items, field.itemDefault ?? 1]);
+  const remove = (i) => onChange(items.filter((_, idx) => idx !== i));
+  return html`
+    <div class="field">
+      <label>${field.label}</label>
+      ${items.map(
+        (v, i) => html`
+          <div class="field-row" key=${i}>
+            <input
+              type="number"
+              step="1"
+              class="field__control"
+              value=${v}
+              onInput=${(e) => update(i, parseInt(e.currentTarget.value || "0", 10))}
+            />
+            <button type="button" class="btn btn--small btn--danger" onClick=${() => remove(i)}>✕</button>
+          </div>
+        `
+      )}
+      <button type="button" class="btn btn--small" onClick=${add}>+ Add window size</button>
+      ${items.length === 0 ? html`<p class="field-hint">No window sizes added — nothing will be tiled.</p>` : null}
+    </div>
+  `;
+}
+
 function ModelSetField({ field, value, onChange }) {
   const selected = value ?? [];
   const toggle = (n) => {
@@ -224,6 +252,7 @@ const FIELD_COMPONENTS = {
   mutationList: MutationListField,
   matrix4x4: Matrix4x4Field,
   modelSet: ModelSetField,
+  intList: IntListField,
 };
 
 // Generic form renderer driven entirely by a block definition's `fields`

@@ -200,7 +200,7 @@ export const BLOCK_DEFINITIONS = [
     category: "Analysis",
     label: "Rubber Window",
     summary:
-      'Slide masked ("N"-filled) windows across the sequence and measure the donor/acceptor score shift at the exon\'s boundaries. Uses either the fixed window size OR the overlapping min/max range below — not both (the range takes priority if both are set).',
+      'Slide masked ("N"-filled) windows across the sequence and measure the donor/acceptor score shift at the exon\'s boundaries, trying every window size in the list below at every base position. Finds inhibiting subsequences by default (masking raises the score); check the box below to search for activating ones instead (masking lowers the score).',
     fields: [
       { key: "exonStart", label: "Exon start (0-based)", type: "int", default: 0 },
       { key: "exonEnd", label: "Exon end (0-based)", type: "int", default: 10 },
@@ -216,37 +216,49 @@ export const BLOCK_DEFINITIONS = [
         type: "int",
         default: null,
       },
-      { key: "window_size", label: "Fixed window size", type: "int", default: 5 },
-      {
-        key: "allWindowMin",
-        label: "Overlapping range: min length (optional)",
-        type: "int",
-        default: null,
-      },
-      {
-        key: "allWindowMax",
-        label: "Overlapping range: max length (optional)",
-        type: "int",
-        default: null,
-      },
+      { key: "windowSizes", label: "Window sizes", type: "intList", default: [5], itemDefault: 5 },
       { key: "batch_size", label: "Batch size", type: "int", default: 50 },
       { key: "models_used", label: "SpliceAI models used", type: "modelSet", default: [5] },
+      {
+        key: "searchActivator",
+        label: "Search for activating subsequences (unchecked = inhibiting)",
+        type: "checkbox",
+        default: false,
+      },
+      {
+        key: "first_search_window_size",
+        label: "First-pass zone search: window size",
+        type: "int",
+        default: 20,
+      },
+      {
+        key: "first_search_step",
+        label: "First-pass zone search: step",
+        type: "int",
+        default: 10,
+      },
+      { key: "keep_prop", label: "Zone keep proportion (%)", type: "int", default: 30 },
+      { key: "top_more_relevent", label: "Top N windows kept per type", type: "int", default: 10 },
     ],
     outputKind: "rubberWindow",
     run: (params) => {
       const hasInterval = params.intervalStart != null && params.intervalEnd != null;
-      const hasAllWindow = params.allWindowMin != null && params.allWindowMax != null;
       return workspace.rubberWindow({
         exon: [params.exonStart, params.exonEnd],
         interval: hasInterval ? [params.intervalStart, params.intervalEnd] : null,
-        // hasAllWindow takes priority over the fixed window_size default so
-        // filling in both range fields doesn't hit the backend's
-        // mutually-exclusive-parameters error just because window_size still
-        // carries its own default.
-        window_size: hasAllWindow ? null : params.window_size,
-        all_window_size: hasAllWindow ? [params.allWindowMin, params.allWindowMax] : null,
+        // rubber_window() takes window_size and all_window_size as mutually
+        // exclusive tiling modes; this block only ever drives the
+        // all_window_size list (one or more window lengths), never the
+        // single window_size value.
+        window_size: null,
+        all_window_size: params.windowSizes,
         batch_size: params.batch_size,
         models_used: params.models_used,
+        first_search_window_size: params.first_search_window_size,
+        first_search_step: params.first_search_step,
+        keep_prop: params.keep_prop,
+        top_more_relevent: params.top_more_relevent,
+        search_activator_repressor: params.searchActivator ? "activator" : "repressor",
       });
     },
   },

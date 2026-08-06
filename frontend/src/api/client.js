@@ -32,15 +32,95 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+const WS_BASE = "ws://127.0.0.1:8000";
+
+export function setWsBase(url) {
+  // stored alongside apiBase for convenience
+}
+
+export function rubberWindowWs(payload, onMessage, signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const wsUrl = (getApiBase() || "http://127.0.0.1:8000").replace(/^http/, "ws") + "/ws/rubber-window";
+    const ws = new WebSocket(wsUrl);
+
+    const closeWs = () => {
+      if (!settled) {
+        settled = true;
+        ws.close();
+        reject(new Error("Cancelled"));
+      }
+    };
+
+    if (signal) {
+      if (signal.aborted) {
+        closeWs();
+        return;
+      }
+      signal.addEventListener("abort", closeWs, { once: true });
+    }
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      onMessage(msg);
+      if (msg.type === "complete") {
+        settled = true;
+        if (signal) signal.removeEventListener("abort", closeWs);
+        ws.close();
+        resolve(msg.data);
+      } else if (msg.type === "error") {
+        settled = true;
+        if (signal) signal.removeEventListener("abort", closeWs);
+        ws.close();
+        reject(new Error(msg.message || "WebSocket operation failed"));
+      } else if (msg.type === "cancelled") {
+        settled = true;
+        if (signal) signal.removeEventListener("abort", closeWs);
+        ws.close();
+        reject(new Error("Cancelled"));
+      }
+    };
+
+    ws.onerror = () => {
+      if (!settled) {
+        settled = true;
+        if (signal) signal.removeEventListener("abort", closeWs);
+        reject(new Error("WebSocket connection error"));
+      }
+    };
+
+    ws.onclose = (e) => {
+      if (!settled) {
+        settled = true;
+        if (signal) signal.removeEventListener("abort", closeWs);
+        reject(new Error(`WebSocket closed unexpectedly (code ${e.code})`));
+      }
+    };
+  });
+}
+
+async function request(method, path, body, signal) {
   let res;
   try {
     res = await fetch(getApiBase() + path, {
       method,
       headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
   } catch (networkErr) {
+    if (networkErr.name === "AbortError") {
+      throw new ApiError("Cancelled", 0, null);
+    }
     throw new ApiError(
       `Network error reaching ${path}. Is the backend running and served through frontend/serve.py? (${networkErr.message})`,
       0,
@@ -88,43 +168,40 @@ export const api = {
   get: {
     sequence: (sessionId) => request("GET", "/get/sequence" + qs({ session_id: sessionId })),
     gv: (sessionId) => request("GET", "/get/gv" + qs({ session_id: sessionId })),
-    simpleProba: (sessionId) => request("GET", "/get/simpleproba" + qs({ session_id: sessionId })),
+    simpleProba: (sessionId, signal) => request("GET", "/get/simpleproba" + qs({ session_id: sessionId }), undefined, signal),
     deltaProba: (sessionId) => request("GET", "/get/deltaproba" + qs({ session_id: sessionId })),
     mutations: (sessionId) => request("GET", "/get/mutations" + qs({ session_id: sessionId })),
-    alteredSequence: (sessionId) => request("GET", "/get/alteredsequence" + qs({ session_id: sessionId })),
+    alteredSequence: (sessionId, signal) => request("GET", "/get/alteredsequence" + qs({ session_id: sessionId }), undefined, signal),
     // -> { "<n>: <mutation.human label>": { acceptor_proba, donor_proba, "altered sequence" }, ... }
     // One entry per tracked alteration in the session (see AlteredSequenceTrackerMixin),
     // in chronological order. The "<n>: " prefix disambiguates repeated labels
     // (e.g. two "mutate_independently" calls would otherwise collide).
-    allSimpleProbas: (sessionId) => request("GET", "/get/allsimpleprobas" + qs({ session_id: sessionId })),
+    allSimpleProbas: (sessionId, signal) => request("GET", "/get/allsimpleprobas" + qs({ session_id: sessionId }), undefined, signal),
   },
 
   altByIndex: {
     // { start, end?, length?, session_id? } -- provide end XOR length, never both.
-    delete: (payload) => request("POST", "/altbyindex/delete", payload),
+    delete: (payload, signal) => request("POST", "/altbyindex/delete", payload, signal),
     // { pattern, index, length, session_id? } -- length=0 means pure insert (no overwrite).
-    insert: (payload) => request("POST", "/altbyindex/insert", payload),
+    insert: (payload, signal) => request("POST", "/altbyindex/insert", payload, signal),
     // { start_cc, end_cc, index_paste, length_paste, session_id? }
-    move: (payload) => request("POST", "/altbyindex/move", payload),
-    copyPaste: (payload) => request("POST", "/altbyindex/copypast", payload),
+    move: (payload, signal) => request("POST", "/altbyindex/move", payload, signal),
+    copyPaste: (payload, signal) => request("POST", "/altbyindex/copypast", payload, signal),
   },
 
   altByPattern: {
     // { old, new, session_id? } -- wildcards: '_' = 1 base, '%(n)' = up to n bases, '%' = any length.
-    replace: (payload) => request("POST", "/altbypattern/replace", payload),
+    replace: (payload, signal) => request("POST", "/altbypattern/replace", payload, signal),
     // { pattern, session_id? }
-    delete: (payload) => request("POST", "/altbypattern/delete", payload),
+    delete: (payload, signal) => request("POST", "/altbypattern/delete", payload, signal),
   },
 
   // { prob_mat: number[4][4] (rows/cols ordered A,C,G,T), simulated_phenomenon?, session_id? }
-  mutateIndependently: (payload) => request("POST", "/mutateindependently", payload),
+  mutateIndependently: (payload, signal) => request("POST", "/mutateindependently", payload, signal),
 
   analysis: {
     // { step?, penality?, threshold?, specified_models_used?, session_id? } -> { "(mut,...)": score }
     patternInZona: (payload) => request("POST", "/analysis/patterninzona", payload),
-    // { exon, interval?, window_size?, all_window_size?, models_used?, batch_size?, session_id? }
-    // -> { "start_end": { donor, acceptor, subsequence } }
-    rubberWindow: (payload) => request("POST", "/analysis/rubberwindow", payload),
   },
 
   ensembl: {

@@ -38,7 +38,12 @@ export function Popover({ x, y, position, scores, sequence, onClose }) {
     >
       <div class="popover__header">
         <strong>Position ${position}</strong>
-        <button type="button" class="popover__close" onClick=${onClose}>&times;</button>
+        <button type="button" class="popover__close" onClick=${onClose}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="3" y1="3" x2="13" y2="13" />
+              <line x1="13" y1="3" x2="3" y2="13" />
+            </svg>
+          </button>
       </div>
       <div class="popover__body">
         <table class="popover__scores">

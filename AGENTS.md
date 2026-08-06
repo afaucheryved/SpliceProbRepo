@@ -7,8 +7,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 ## Structure
 
 - `app/` — FastAPI backend (SpliceAI splicing-impact API). Routers in `app/router/`, business logic in `app/services/` and `app/domain/`.
-- `frontend/` — plain ES modules + CDN imports (Preact + htm, Chart.js), no build step. Three switchable UI concepts under `frontend/src/views/{pipeline,dashboard,comparative}/`, sharing `frontend/src/components/shared/*`, `frontend/src/lib/*`, and `frontend/src/styles/base.css`. See `frontend/README.md` for the run/dev-proxy setup (`frontend/serve.py` proxies API calls to the backend to sidestep missing CORS headers — it is a frontend-only dev tool, not part of the backend).
-- Branch history: `dev` (the repo's declared default/PR-target branch) does **not** contain `frontend/` — that only exists on `dev_claude`, which is `dev` plus ~17 commits of frontend build-out and backend fixes. Confirm which branch a task's worktree is actually based on before assuming `frontend/` is present.
+- `frontend/` — plain ES modules + CDN imports (Preact + htm, Chart.js), no build step. Single CyberChef-style pipeline UI under `frontend/src/views/pipeline/`, sharing `frontend/src/components/shared/*`, `frontend/src/lib/*`, and `frontend/src/styles/base.css`. (The Workbench/dashboard and Compare/comparative views were removed — pipeline is the only mode.) See `frontend/README.md` for the run/dev-proxy setup (`frontend/serve.py` proxies API calls to the backend to sidestep missing CORS headers — it is a frontend-only dev tool, not part of the backend).
 
 ## Backend quirks discovered via live testing
 

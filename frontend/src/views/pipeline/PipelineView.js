@@ -1,13 +1,25 @@
-import { html, useState, useRef } from "../../lib/preact.js";
+import { html, useState, useRef, useCallback, useMemo } from "../../lib/preact.js";
 import { SessionBar } from "../../components/shared/SessionBar.js";
 import { Spinner } from "../../components/shared/Feedback.js";
 import { useWorkspace, workspace } from "../../lib/workspace.js";
 import { api } from "../../api/client.js";
-import { parseTrackedLabel, parseMutation, diffToPointMutations } from "../../lib/sequence.js";
+import { parseTrackedLabel } from "../../lib/sequence.js";
 import { BlockLibrary } from "./BlockLibrary.js";
 import { RecipeBlock } from "./RecipeBlock.js";
 import { OutputPanel } from "./OutputPanel.js";
-import { BLOCK_DEFINITIONS, blockById, defaultParams } from "./blockDefinitions.js";
+import { BLOCK_DEFINITIONS, defaultParams } from "./blockDefinitions.js";
+
+const MODIFICATION_BLOCK_IDS = [
+  "replace_substring",
+  "delete_substring",
+  "move_substring",
+  "copy_paste_substring",
+  "replace_motif",
+  "delete_motif",
+  "random_mutate",
+];
+
+const BLOCK_MAP = Object.fromEntries(BLOCK_DEFINITIONS.map((d) => [d.id, d]));
 
 let uidSeq = 0;
 const nextUid = () => `blk_${++uidSeq}`;
@@ -17,7 +29,9 @@ const nextUid = () => `blk_${++uidSeq}`;
 // never squeeze a column away entirely.
 const HANDLE_WIDTH = 8;
 const MIN_LIBRARY_WIDTH = 180;
-const MIN_OUTPUT_WIDTH = 320;
+const MIN_RECIPE_WIDTH = 280;
+const MIN_SESSION_HEIGHT = 70;
+const MIN_OUTPUT_HEIGHT = 180;
 
 function summarize(def, result) {
   switch (def.outputKind) {
@@ -27,10 +41,6 @@ function summarize(def, result) {
       return "→ baseline probability computed";
     case "probaHistory":
       return `→ ${Object.keys(result ?? {}).length} tracked alteration(s)`;
-    case "delta":
-      return "→ delta score computed";
-    case "zones":
-      return `→ ${Object.keys(result ?? {}).length} pattern(s) scored`;
     default:
       return "→ done";
   }
@@ -45,7 +55,7 @@ export function PipelineView() {
   const [overIndex, setOverIndex] = useState(null);
   const [libraryWidth, setLibraryWidth] = useState(240);
   const [recipeWidth, setRecipeWidth] = useState(420);
-  const [outputWidth, setOutputWidth] = useState(360);
+  const [sessionHeight, setSessionHeight] = useState(null);
   const columnsRef = useRef(null);
   const resizeStateRef = useRef(null);
   const cancelRef = useRef(false);
@@ -54,13 +64,24 @@ export function PipelineView() {
     const rs = resizeStateRef.current;
     if (!rs) return;
     const delta = e.clientX - rs.startX;
-    const gaps = HANDLE_WIDTH * 2;
     if (rs.column === "library") {
-      const maxLibrary = Math.max(MIN_LIBRARY_WIDTH, rs.containerWidth - gaps - rs.startRecipe - MIN_OUTPUT_WIDTH);
-      setLibraryWidth(Math.min(Math.max(MIN_LIBRARY_WIDTH, rs.startLibrary + delta), maxLibrary));
+      const combined = rs.startLibrary + rs.startRecipe;
+      const maxLibrary = Math.max(MIN_LIBRARY_WIDTH, combined - MIN_RECIPE_WIDTH);
+      const newLibrary = Math.min(Math.max(MIN_LIBRARY_WIDTH, rs.startLibrary + delta), maxLibrary);
+      setLibraryWidth(newLibrary);
+      setRecipeWidth(combined - newLibrary);
     } else if (rs.column === "output") {
-      const maxOutput = Math.max(MIN_OUTPUT_WIDTH, rs.containerWidth - gaps - rs.startLibrary - rs.startRecipe);
-      setOutputWidth(Math.min(Math.max(MIN_OUTPUT_WIDTH, rs.startOutput + delta), maxOutput));
+      const newRecipe = Math.max(MIN_RECIPE_WIDTH, rs.startRecipe + delta);
+      setRecipeWidth(newRecipe);
+    } else if (rs.column === "session") {
+      const colEl = rs.parentEl;
+      if (!colEl) return;
+      const colRect = colEl.getBoundingClientRect();
+      const totalHeight = colRect.height;
+      const newSessionHeight = rs.startSession + (e.clientY - rs.startY);
+      const maxSession = Math.max(MIN_SESSION_HEIGHT, totalHeight - MIN_OUTPUT_HEIGHT);
+      const clamped = Math.min(Math.max(MIN_SESSION_HEIGHT, newSessionHeight), maxSession);
+      setSessionHeight(clamped);
     }
   }
 
@@ -72,20 +93,25 @@ export function PipelineView() {
 
   function startResize(column, e) {
     e.preventDefault();
+    const colEl = column === "session" ? columnsRef.current?.querySelector(".pipeline-view__output-col") : null;
+    const sessionEl = colEl?.querySelector(".pipeline-view__session");
     resizeStateRef.current = {
       column,
       startX: e.clientX,
+      startY: e.clientY,
       startLibrary: libraryWidth,
       startRecipe: recipeWidth,
-      startOutput: outputWidth,
+      startSession: sessionEl ? sessionEl.getBoundingClientRect().height : (sessionHeight ?? 100),
+      parentEl: colEl,
       containerWidth: columnsRef.current?.getBoundingClientRect().width ?? 0,
     };
     window.addEventListener("mousemove", handleResizeMove);
     window.addEventListener("mouseup", stopResize);
   }
 
-  function addBlock(defId, atIndex = recipe.length) {
-    const def = blockById(defId);
+  const addBlock = useCallback((defId, atIndex) => {
+    const idx = atIndex ?? recipe.length;
+    const def = BLOCK_MAP[defId];
     const block = {
       uid: nextUid(),
       defId,
@@ -97,36 +123,32 @@ export function PipelineView() {
     };
     setRecipe((r) => {
       const next = [...r];
-      next.splice(atIndex, 0, block);
+      next.splice(idx, 0, block);
       return next;
     });
-  }
+  }, []);
 
-  const removeBlock = (uid) => setRecipe((r) => r.filter((b) => b.uid !== uid));
-  const toggleBlock = (uid) => setRecipe((r) => r.map((b) => (b.uid === uid ? { ...b, enabled: !b.enabled } : b)));
-  const updateParams = (uid, params) => setRecipe((r) => r.map((b) => (b.uid === uid ? { ...b, params } : b)));
+  const removeBlock = useCallback((uid) => setRecipe((r) => r.filter((b) => b.uid !== uid)), []);
+  const toggleBlock = useCallback((uid) => setRecipe((r) => r.map((b) => (b.uid === uid ? { ...b, enabled: !b.enabled } : b))), []);
+  const updateParams = useCallback((uid, params) => setRecipe((r) => r.map((b) => (b.uid === uid ? { ...b, params } : b))), []);
 
-  function patchBlock(uid, patch) {
+  const patchBlock = useCallback((uid, patch) => {
     setRecipe((r) => r.map((b) => (b.uid === uid ? { ...b, ...patch } : b)));
-  }
+  }, []);
 
-  function reorder(from, to) {
+  const reorder = useCallback((from, to) => {
     setRecipe((r) => {
       const next = [...r];
       const [moved] = next.splice(from, 1);
       next.splice(to > from ? to - 1 : to, 0, moved);
       return next;
     });
-  }
+  }, []);
 
-  const dragHandlers = {
+  const dragHandlers = useMemo(() => ({
     onDragStart: (e, index) => {
       setDragIndex(index);
       e.dataTransfer.effectAllowed = "move";
-      // Also tag the drag with the recipe block's uid so mutation-list
-      // drop targets can identify which block was dragged (Task 9).
-      const block = recipe[index];
-      if (block) e.dataTransfer.setData("application/x-recipe-block-uid", block.uid);
     },
     onDragOver: (e, index) => {
       e.preventDefault();
@@ -144,7 +166,7 @@ export function PipelineView() {
       setDragIndex(null);
       setOverIndex(null);
     },
-  };
+  }), [dragIndex]);
 
   function handleTailDrop(e) {
     e.preventDefault();
@@ -174,20 +196,44 @@ export function PipelineView() {
     setOverIndex(null);
   }
 
-  const ALTERATION_CATEGORIES = new Set(["Index-based", "Pattern-based", "Random"]);
+  const handleBlockAction = useCallback((blockUid, actionKey) => {
+    setRecipe((r) => {
+      if (actionKey === "dropModifications") {
+        const blockIndex = r.findIndex((b) => b.uid === blockUid);
+        if (blockIndex === -1) return r;
+        const next = [...r];
+        const ids = [...MODIFICATION_BLOCK_IDS];
+        for (let i = ids.length - 1; i >= 0; i--) {
+          const def = BLOCK_MAP[ids[i]];
+          next.splice(blockIndex + 1, 0, {
+            uid: nextUid(),
+            defId: ids[i],
+            params: defaultParams(def),
+            enabled: true,
+            status: "idle",
+            error: null,
+            resultSummary: null,
+          });
+        }
+        return next;
+      }
+      return r;
+    });
+  }, []);
 
   async function bake() {
     if (!ws.sessionId) return;
+    workspace.startCancelSession();
     setRunning(true);
     setFinalResult(null);
     cancelRef.current = false;
-    setRecipe((r) => r.map((b) => ({ ...b, status: "idle", error: null, resultSummary: null })));
+    setRecipe((r) => r.map((b) => ({ ...b, status: "idle", error: null, resultSummary: null, progress: null })));
 
-    // If any enabled block is an alteration-category block, reset the session
-    // so every Bake starts from a clean altered sequence (no accumulated
-    // tracked entries from previous Bakes) — see Task 7.
+    // If any enabled block is a Sequence Modification block, reset the
+    // session so every Bake starts from a clean altered sequence (no
+    // accumulated tracked entries from previous Bakes) — see Task 7.
     const hasAlteration = recipe.some(
-      (b) => b.enabled && ALTERATION_CATEGORIES.has(blockById(b.defId).category)
+      (b) => b.enabled && BLOCK_MAP[b.defId].section === "Sequence Modification"
     );
     if (hasAlteration) {
       try {
@@ -211,11 +257,14 @@ export function PipelineView() {
         patchBlock(block.uid, { status: "skipped" });
         continue;
       }
-      const def = blockById(block.defId);
+      const def = BLOCK_MAP[block.defId];
       const beforeSeq = runningSequence;
-      patchBlock(block.uid, { status: "running" });
+      patchBlock(block.uid, { status: "running", progress: null });
       try {
-        const result = await def.run(block.params);
+        const progressCb = def.run.length >= 2
+          ? (msg) => patchBlock(block.uid, { progress: msg })
+          : null;
+        const result = await def.run(block.params, progressCb);
         // If this block produced a sequence result, update the running
         // sequence and store the before/after pair on the block.
         if (def.outputKind === "sequence" && typeof result === "string") {
@@ -236,7 +285,8 @@ export function PipelineView() {
         lastOutput = { kind: def.outputKind, data: result, params: block.params };
         allResults.push(lastOutput);
       } catch (err) {
-        patchBlock(block.uid, { status: "error", error: err.message || String(err) });
+        const isCancelled = err.message === "Cancelled";
+        patchBlock(block.uid, { status: isCancelled ? "cancelled" : "error", error: isCancelled ? null : (err.message || String(err)) });
         stopped = true;
       }
     }
@@ -265,66 +315,7 @@ export function PipelineView() {
 
     setFinalResult(lastOutput ? { kind: lastOutput.kind, data: lastOutput.data, params: lastOutput.params, operations, allResults } : null);
     setRunning(false);
-  }
-
-  // Drop handler for dragging an alteration block onto a point-mutations
-  // block's mutation list. Translates the structural operation into
-  // explicit >p.<pos>.<ref>><alt> strings (Task 9).
-  function handleDropOnMutationList(targetUid, sourceUid) {
-    const sourceBlock = recipe.find((b) => b.uid === sourceUid);
-    if (!sourceBlock) return { error: "Source block not found in recipe." };
-    const def = blockById(sourceBlock.defId);
-    if (!def) return { error: "Unknown block type." };
-
-    // Only Index-based and Pattern-based blocks produce a sequence diff.
-    if (def.category !== "Index-based" && def.category !== "Pattern-based") {
-      return { error: `"${def.label}" blocks cannot be translated to point mutations — only Index-based and Pattern-based operations produce a sequence diff.` };
-    }
-
-    const before = sourceBlock.beforeSequence;
-    const after = sourceBlock.resultData;
-    if (!before || !after || typeof before !== "string" || typeof after !== "string") {
-      return { error: "No before/after sequence data available for this block. Run the recipe first so the block's effect can be captured." };
-    }
-
-    const { mutations, error } = diffToPointMutations(before, after);
-    if (error) return { error };
-    if (mutations.length === 0) {
-      return { error: "This operation produced no base-level changes — nothing to append." };
-    }
-
-    // Append the mutations to the target block's rows.
-    setRecipe((r) =>
-      r.map((b) => {
-        if (b.uid !== targetUid) return b;
-        const existingRows = b.params.rows || [];
-        const newRows = mutations.map((m) => {
-          const parsed = parseMutation(m);
-          return parsed ? { position: parsed.position, ref: parsed.ref, alt: parsed.alt } : null;
-        }).filter(Boolean);
-        return { ...b, params: { ...b.params, rows: [...existingRows, ...newRows] } };
-      })
-    );
-    return { error: null };
-  }
-
-  // Drop handler for dragging a block straight out of the library (never
-  // added to the recipe, so it has no before/after diff to translate yet --
-  // item 1). Adds it to the recipe right before the target scoring block and
-  // tells the user to Bake, then drag it again from the recipe stack (the
-  // path handleDropOnMutationList above already handles) to actually append
-  // its mutations.
-  function handleDropLibraryBlockOnMutationList(targetUid, libraryBlockId) {
-    const def = blockById(libraryBlockId);
-    if (!def) return { error: "Unknown block type." };
-    if (def.category !== "Index-based" && def.category !== "Pattern-based") {
-      return { error: `"${def.label}" blocks cannot be translated to point mutations — only Index-based and Pattern-based operations produce a sequence diff.` };
-    }
-    const targetIndex = recipe.findIndex((b) => b.uid === targetUid);
-    addBlock(libraryBlockId, targetIndex === -1 ? recipe.length : targetIndex);
-    return {
-      error: `"${def.label}" was added to your recipe. Bake, then drag it from the recipe stack (not the library) onto this field to append its mutations.`,
-    };
+    workspace.clearCancelSession();
   }
 
   return html`
@@ -332,7 +323,7 @@ export function PipelineView() {
       <div
         class="pipeline-view__columns"
         ref=${columnsRef}
-        style=${`grid-template-columns: ${libraryWidth}px ${HANDLE_WIDTH}px ${recipeWidth}px ${HANDLE_WIDTH}px ${outputWidth}px`}
+        style=${`grid-template-columns: ${libraryWidth}px ${HANDLE_WIDTH}px ${recipeWidth}px ${HANDLE_WIDTH}px 1fr`}
       >
         <aside class="pipeline-view__library panel">
           <h3 class="panel__title">Operations</h3>
@@ -355,13 +346,12 @@ export function PipelineView() {
                   <${RecipeBlock}
                     key=${block.uid}
                     block=${block}
-                    def=${blockById(block.defId)}
+                    def=${BLOCK_MAP[block.defId]}
                     index=${index}
                     onParamsChange=${updateParams}
                     onRemove=${removeBlock}
                     onToggle=${toggleBlock}
-                    onDropOnMutationList=${handleDropOnMutationList}
-                    onDropLibraryBlock=${handleDropLibraryBlockOnMutationList}
+                    onBlockAction=${handleBlockAction}
                     dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
                   />
                 `,
@@ -384,12 +374,13 @@ export function PipelineView() {
         <div class="pipeline-view__resize-handle" onMouseDown=${(e) => startResize("output", e)}></div>
 
         <div class="pipeline-view__output-col">
-          <div class="pipeline-view__session">
+          <div class="pipeline-view__session" style=${sessionHeight != null ? `height:${sessionHeight}px;overflow:auto;` : ""}>
             <${SessionBar} compact />
           </div>
+          <div class="pipeline-view__resize-handle--vertical" onMouseDown=${(e) => startResize("session", e)}></div>
           <section class="pipeline-view__output panel">
             <h3 class="panel__title">Output</h3>
-            ${running ? html`<button type="button" class="btn btn--danger btn--small output__stop-btn" onClick=${() => { cancelRef.current = true; }}>Stop</button>` : null}
+            ${running ? html`<button type="button" class="btn btn--danger btn--small output__stop-btn" onClick=${() => { cancelRef.current = true; workspace.cancelAll(); }}>Stop</button>` : null}
             ${running ? html`<${Spinner} label="Running recipe…" />` : null}
             <${OutputPanel} result=${finalResult} />
           </section>

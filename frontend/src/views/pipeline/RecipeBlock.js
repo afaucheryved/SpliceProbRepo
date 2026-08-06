@@ -9,21 +9,22 @@ const STATUS_ICON = {
   success: "●",
   error: "✕",
   skipped: "—",
+  cancelled: "□",
 };
 
 // A single stackable, draggable recipe card. Reordering is native HTML5
 // drag-and-drop (no extra dependency) driven by the parent PipelineView.
-export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onDropOnMutationList, onDropLibraryBlock, dragHandlers }) {
+export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onBlockAction, dragHandlers }) {
   const [collapsed, setCollapsed] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  // Only the "Tracked Alterations" block (probaHistory output) has a
-  // per-entry breakdown worth expanding (Task 14) — its resultData is the
-  // same label -> entry map GET /get/allsimpleprobas returns.
+  // Only the "Delta Score" block (probaHistory output) has a per-entry
+  // breakdown worth expanding (Task 14) — its resultData is the same
+  // label -> entry map GET /get/allsimpleprobas returns.
   const isExpandableSummary = def.outputKind === "probaHistory" && block.resultData && typeof block.resultData === "object";
   const trackedLabels = isExpandableSummary ? Object.keys(block.resultData) : [];
 
   const topSet = new Set();
-  if (isExpandableSummary && block.params?.showTopOnly) {
+  if (isExpandableSummary && block.params?.entityFilter === "topN") {
     for (const s of topTrackedEntries(block.resultData, block.params.topN)) {
       topSet.add(s.label);
     }
@@ -58,7 +59,22 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
       ${!collapsed
         ? html`
             <p class="recipe-block__summary">${def.summary}</p>
-            <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} blockUid=${block.uid} onDropOnMutationList=${onDropOnMutationList} onDropLibraryBlock=${onDropLibraryBlock} />
+            <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} />
+            ${def.actions?.map(
+              (action) => html`
+                <button
+                  key=${action.key}
+                  type="button"
+                  class="btn btn--small recipe-block__action"
+                  onClick=${() => onBlockAction?.(block.uid, action.key)}
+                >
+                  ${action.label}
+                </button>
+              `
+            )}
+            ${block.progress && block.progress.type === "progress"
+              ? html`<p class="recipe-block__progress">Batch ${block.progress.current_batch + 1} / ${block.progress.total_batches}</p>`
+              : null}
             ${block.error ? html`<p class="recipe-block__error">⚠ ${block.error}</p>` : null}
             ${block.resultSummary
               ? isExpandableSummary

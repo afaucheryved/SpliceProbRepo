@@ -126,13 +126,20 @@ class GeneralServices:
         except Exception as e:
             raise Exception(f"Unexpected exception at apply_mutations() : {e}") from e
 
-    def return_proba_simple(self)-> JSON:
+    def return_proba_simple(self, using_altered_sequence: bool = False)-> JSON:
         """
-        return proba json object for simple analysis
+        return proba json object for simple analysis.
+
+        ``using_altered_sequence=True`` scores ``self.altered_sequence`` (the
+        session's current, persisted state) instead of the default
+        ``self.sequence``/``self._mutations_target_attr`` pair, which only
+        reflects ad hoc point mutations applied to this one call -- needed by
+        GET /get/simpleproba to report the sequence's live probability after
+        prior structural alterations rather than the untouched base sequence.
         """
         self.apply_mutations()
-        result = self.result_per_sequences()
-        result["altered sequence"] = getattr(self, self._mutations_target_attr)
+        result = self.result_per_sequences(using_altered_sequence=using_altered_sequence)
+        result["altered sequence"] = self.altered_sequence if using_altered_sequence else getattr(self, self._mutations_target_attr)
         return result
     
     def return_proba_delta(self, 

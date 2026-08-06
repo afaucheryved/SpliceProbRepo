@@ -2,15 +2,17 @@
 // drives the generic BlockForm renderer; `run` executes the block against
 // the shared workspace store and returns a normalized `{ kind, ... }`
 // result that OutputPanel knows how to render.
+//
+// `section` drives the OPERATION menu's top-level grouping (Sequence
+// Modification / Sequence Analysis); `category` is the menu's sub-heading
+// within that section and also the badge shown on a recipe card.
 import { api, MUTATION_MATRIX_BASES } from "../../api/client.js";
 import { workspace } from "../../lib/workspace.js";
-import { buildMutation } from "../../lib/sequence.js";
 
-// Category -> CSS modifier slug, for the two categories that score/analyze
-// rather than modify the sequence (Task 15). Index-based/Pattern-based/Random
-// keep the default neutral styling (no slug).
+// CSS modifier slug for categories that score/analyze rather than modify the
+// sequence -- "by sub string index" / "by ACGT motif" / "Random" keep the default
+// neutral styling (no slug).
 const CATEGORY_SLUG = {
-  Scoring: "scoring",
   Analysis: "analysis",
 };
 
@@ -22,18 +24,12 @@ function identityMatrix() {
   return MUTATION_MATRIX_BASES.map((_, r) => MUTATION_MATRIX_BASES.map((_, c) => (r === c ? 1 : 0)));
 }
 
-function mutationsFromRows(rows) {
-  const strings = (rows || [])
-    .filter((r) => r.position && r.ref && r.alt)
-    .map((r) => buildMutation(r.position, r.ref, r.alt));
-  return strings.length ? strings : [""];
-}
-
 export const BLOCK_DEFINITIONS = [
   {
-    id: "insert",
-    category: "Index-based",
-    label: "Insert Pattern",
+    id: "replace_substring",
+    section: "Sequence Modification",
+    category: "by sub string index",
+    label: "Replace sub string",
     summary: "Place a pattern at an index, optionally overwriting a run of bases.",
     fields: [
       { key: "pattern", label: "Pattern (ACGT)", type: "sequence", default: "aaaa" },
@@ -42,14 +38,15 @@ export const BLOCK_DEFINITIONS = [
     ],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration(`Insert "${params.pattern}" @${params.index}`, (sessionId) =>
-        api.altByIndex.insert({ ...params, session_id: sessionId })
+      workspace.runAlteration(`Replace "${params.pattern}" @${params.index}`, (sessionId, signal) =>
+        api.altByIndex.insert({ ...params, session_id: sessionId }, signal)
       ),
   },
   {
-    id: "delete_index",
-    category: "Index-based",
-    label: "Delete by Index",
+    id: "delete_substring",
+    section: "Sequence Modification",
+    category: "by sub string index",
+    label: "Delete sub string",
     summary: "Delete bases between start/end, or start + length, or start to the end.",
     fields: [
       { key: "start", label: "Start (1-based)", type: "int", default: 1 },
@@ -72,15 +69,16 @@ export const BLOCK_DEFINITIONS = [
       const payload = { start: params.start, session_id: undefined };
       if (params.mode === "end") payload.end = params.end;
       else if (params.mode === "length") payload.length = params.length;
-      return workspace.runAlteration(`Delete from ${params.start} (${params.mode})`, (sessionId) =>
-        api.altByIndex.delete({ ...payload, session_id: sessionId })
+      return workspace.runAlteration(`Delete from ${params.start} (${params.mode})`, (sessionId, signal) =>
+        api.altByIndex.delete({ ...payload, session_id: sessionId }, signal)
       );
     },
   },
   {
-    id: "move",
-    category: "Index-based",
-    label: "Move (Cut & Paste)",
+    id: "move_substring",
+    section: "Sequence Modification",
+    category: "by sub string index",
+    label: "Move sub string",
     summary: "Cut a region [start_cc, end_cc] and paste it at index_paste.",
     fields: [
       { key: "start_cc", label: "Cut start (1-based)", type: "int", default: 1 },
@@ -90,14 +88,15 @@ export const BLOCK_DEFINITIONS = [
     ],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration(`Move ${params.start_cc}-${params.end_cc} → @${params.index_paste}`, (sessionId) =>
-        api.altByIndex.move({ ...params, session_id: sessionId })
+      workspace.runAlteration(`Move ${params.start_cc}-${params.end_cc} → @${params.index_paste}`, (sessionId, signal) =>
+        api.altByIndex.move({ ...params, session_id: sessionId }, signal)
       ),
   },
   {
-    id: "copy_paste",
-    category: "Index-based",
-    label: "Copy & Paste",
+    id: "copy_paste_substring",
+    section: "Sequence Modification",
+    category: "by sub string index",
+    label: "Copy & Paste sub string",
     summary: "Copy a region [start_cc, end_cc] and paste it at index_paste (source untouched).",
     fields: [
       { key: "start_cc", label: "Copy start (1-based)", type: "int", default: 1 },
@@ -107,14 +106,15 @@ export const BLOCK_DEFINITIONS = [
     ],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration(`Copy ${params.start_cc}-${params.end_cc} → @${params.index_paste}`, (sessionId) =>
-        api.altByIndex.copyPaste({ ...params, session_id: sessionId })
+      workspace.runAlteration(`Copy ${params.start_cc}-${params.end_cc} → @${params.index_paste}`, (sessionId, signal) =>
+        api.altByIndex.copyPaste({ ...params, session_id: sessionId }, signal)
       ),
   },
   {
-    id: "replace_pattern",
-    category: "Pattern-based",
-    label: "Replace Pattern",
+    id: "replace_motif",
+    section: "Sequence Modification",
+    category: "by ACGT motif",
+    label: "Replace Motif",
     summary: 'Regex-like replace. "_" = 1 base, "%(n)" = up to n bases, "%" = any length.',
     fields: [
       { key: "old", label: "Pattern to find", type: "text", default: "acgt" },
@@ -122,100 +122,63 @@ export const BLOCK_DEFINITIONS = [
     ],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration(`Replace "${params.old}" → "${params.new}"`, (sessionId) =>
-        api.altByPattern.replace({ ...params, session_id: sessionId })
+      workspace.runAlteration(`Replace "${params.old}" → "${params.new}"`, (sessionId, signal) =>
+        api.altByPattern.replace({ ...params, session_id: sessionId }, signal)
       ),
   },
   {
-    id: "delete_pattern",
-    category: "Pattern-based",
-    label: "Delete Pattern",
+    id: "delete_motif",
+    section: "Sequence Modification",
+    category: "by ACGT motif",
+    label: "Delete Motif",
     summary: "Delete every occurrence of a wildcard pattern.",
     fields: [{ key: "pattern", label: "Pattern", type: "text", default: "acgt" }],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration(`Delete pattern "${params.pattern}"`, (sessionId) =>
-        api.altByPattern.delete({ ...params, session_id: sessionId })
+      workspace.runAlteration(`Delete pattern "${params.pattern}"`, (sessionId, signal) =>
+        api.altByPattern.delete({ ...params, session_id: sessionId }, signal)
       ),
   },
   {
     id: "random_mutate",
+    section: "Sequence Modification",
     category: "Random",
     label: "Random Mutation",
     summary: "Mutate every base independently using a 4×4 probability matrix (rows/cols = A,C,G,T).",
     fields: [{ key: "prob_mat", label: "Probability matrix", type: "matrix4x4", default: identityMatrix() }],
     outputKind: "sequence",
     run: (params) =>
-      workspace.runAlteration("Random mutation (probability matrix)", (sessionId) =>
-        api.mutateIndependently({ prob_mat: params.prob_mat, session_id: sessionId })
+      workspace.runAlteration("Random mutation (probability matrix)", (sessionId, signal) =>
+        api.mutateIndependently({ prob_mat: params.prob_mat, session_id: sessionId }, signal)
       ),
   },
   {
-    id: "point_mutations_delta",
-    category: "Scoring",
-    label: "Point Mutations → Delta Score",
-    summary: "Score explicit point substitutions against the baseline (does not persist into later blocks).",
-    fields: [{ key: "rows", label: "Point mutations", type: "mutationList", default: [] }],
-    outputKind: "delta",
-    run: (params) => workspace.scoreDelta(mutationsFromRows(params.rows)),
-  },
-  {
-    id: "point_mutations_simple",
-    category: "Scoring",
-    label: "Point Mutations → Baseline Probability",
-    summary: "Baseline acceptor/donor splicing probability (renders as a chart, per the spec's output rule).",
-    fields: [{ key: "rows", label: "Point mutations", type: "mutationList", default: [] }],
-    outputKind: "proba",
-    run: (params) => workspace.scoreSimple(mutationsFromRows(params.rows)),
-  },
-  {
-    id: "tracked_alterations_simple",
-    category: "Scoring",
-    label: "Tracked Alterations → Baseline Probability",
-    summary:
-      "Baseline acceptor/donor splicing probability for every structural alteration performed so far in this session (one chart per tracked entry, most recent last).",
-    fields: [
-      { key: "showTopOnly", label: "Show only top entries", type: "checkbox", default: false },
-      { key: "topN", label: "Top N entries", type: "int", default: 5 },
-    ],
-    outputKind: "probaHistory",
-    run: () => workspace.fetchAllSimpleProbas(),
-  },
-  {
-    id: "zone_analysis",
+    id: "windows_by_splicing_regulation",
+    section: "Sequence Analysis",
     category: "Analysis",
-    label: "Zone Analysis (PELT)",
-    summary: "Detect high-impact regions and rank the most significant windowed mutation patterns within them.",
-    fields: [
-      { key: "step", label: "Step", type: "int", default: 5 },
-      { key: "penality", label: "Penalty", type: "int", default: 2 },
-      { key: "threshold", label: "Threshold (%)", type: "int", default: 20 },
-      { key: "specified_models_used", label: "SpliceAI models used", type: "modelSet", default: [5] },
-    ],
-    outputKind: "zones",
-    run: (params) => workspace.analyzeZones(params),
-  },
-  {
-    id: "rubber_window",
-    category: "Analysis",
-    label: "Rubber Window",
+    label: "Windows By Splicing Regulation",
     summary:
-      'Slide masked ("N"-filled) windows across the sequence and measure the donor/acceptor score shift at the exon\'s boundaries, trying every window size in the list below at every base position. Finds inhibiting subsequences by default (masking raises the score); check the box below to search for activating ones instead (masking lowers the score).',
+      'Slide masked ("N"-filled) windows across the sequence and measure the donor/acceptor score shift at the exon\'s boundaries.',
     fields: [
-      { key: "exonStart", label: "Exon start (0-based)", type: "int", default: 0 },
-      { key: "exonEnd", label: "Exon end (0-based)", type: "int", default: 10 },
+      { key: "exonGs", type: "groupStart", label: "Exon" },
+      { key: "exonStart", label: "start", type: "int", default: 0 },
+      { key: "exonEnd", label: "end", type: "int", default: 10 },
+      { key: "exonGe", type: "groupEnd" },
+      { key: "intervalGs", type: "groupStart", label: "Working interval" },
       {
-        key: "intervalStart",
-        label: "Interval start (optional)",
-        type: "int",
-        default: null,
+        key: "intervalMode",
+        label: "",
+        type: "radioGroup",
+        options: [
+          { value: "full", label: "full sequence" },
+          { value: "specify", label: "specify working zone" },
+        ],
+        default: "full",
       },
-      {
-        key: "intervalEnd",
-        label: "Interval end (optional)",
-        type: "int",
-        default: null,
-      },
+      { key: "intervalStart", label: "start:", type: "int", default: null, showIf: (p) => p.intervalMode === "specify" },
+      { key: "intervalEnd", label: "end:", type: "int", default: null, showIf: (p) => p.intervalMode === "specify" },
+      { key: "intervalGe", type: "groupEnd" },
+      { key: "generalGs", type: "groupStart", label: "General algorithm settings" },
       { key: "windowSizes", label: "Window sizes", type: "intList", default: [5], itemDefault: 5 },
       { key: "batch_size", label: "Batch size", type: "int", default: 50 },
       { key: "models_used", label: "SpliceAI models used", type: "modelSet", default: [5] },
@@ -225,42 +188,78 @@ export const BLOCK_DEFINITIONS = [
         type: "checkbox",
         default: false,
       },
-      {
-        key: "first_search_window_size",
-        label: "First-pass zone search: window size",
-        type: "int",
-        default: 20,
-      },
-      {
-        key: "first_search_step",
-        label: "First-pass zone search: step",
-        type: "int",
-        default: 10,
-      },
-      { key: "keep_prop", label: "Zone keep proportion (%)", type: "int", default: 30 },
-      { key: "top_more_relevent", label: "Top N windows kept per type", type: "int", default: 10 },
+      { key: "topN", label: "number of output windows (x2)", type: "int", default: 5 },
+      { key: "generalGe", type: "groupEnd" },
+      { key: "presetGs", type: "groupStart", label: "Preset algorithm settings" },
+      { key: "presetWindowSize", label: "window size:", type: "int", default: 50 },
+      { key: "presetStep", label: "step:", type: "int", default: 10 },
+      { key: "presetKeepProportion", label: "keep proportion (%):", type: "int", default: 10 },
+      { key: "presetGe", type: "groupEnd" },
     ],
     outputKind: "rubberWindow",
-    run: (params) => {
-      const hasInterval = params.intervalStart != null && params.intervalEnd != null;
+    run: (params, onProgress) => {
+      const hasInterval = params.intervalMode === "specify" && params.intervalStart != null && params.intervalEnd != null;
       return workspace.rubberWindow({
         exon: [params.exonStart, params.exonEnd],
         interval: hasInterval ? [params.intervalStart, params.intervalEnd] : null,
-        // rubber_window() takes window_size and all_window_size as mutually
-        // exclusive tiling modes; this block only ever drives the
-        // all_window_size list (one or more window lengths), never the
-        // single window_size value.
         window_size: null,
         all_window_size: params.windowSizes,
         batch_size: params.batch_size,
         models_used: params.models_used,
-        first_search_window_size: params.first_search_window_size,
-        first_search_step: params.first_search_step,
-        keep_prop: params.keep_prop,
-        top_more_relevent: params.top_more_relevent,
         search_activator_repressor: params.searchActivator ? "activator" : "repressor",
-      });
+      }, onProgress);
     },
+  },
+  {
+    id: "delta_score",
+    section: "Sequence Analysis",
+    category: "Analysis",
+    label: "Delta Score",
+    summary: "Calculate the delta-score between the input sequence and the modified one.",
+    actions: [
+      { key: "dropModifications", label: "+ drop modifications" },
+    ],
+    fields: [
+      {
+        key: "deltaMode",
+        label: "",
+        type: "radioGroup",
+        options: [
+          { value: "all", label: "All modifications applied" },
+          { value: "independent", label: "Of each modification independently" },
+        ],
+        default: "all",
+      },
+      {
+        key: "entityFilter",
+        label: "",
+        type: "radioGroup",
+        options: [
+          { value: "all", label: "show all entities" },
+          { value: "topN", label: "show top N entities" },
+        ],
+        default: "all",
+        showIf: (p) => p.deltaMode === "independent",
+      },
+      { key: "topN", label: "", type: "int", default: 5, showIf: (p) => p.deltaMode === "independent" && p.entityFilter === "topN" },
+    ],
+    outputKind: "probaHistory",
+    run: (params) => {
+      if (params.deltaMode === "all") {
+        return workspace.fetchDeltaProba();
+      }
+      return workspace.fetchAllSimpleProbas();
+    },
+  },
+  {
+    id: "baseline_probability",
+    section: "Sequence Analysis",
+    category: "Analysis",
+    label: "Baseline Probability",
+    summary: "Absolute acceptor/donor splicing probability of the sequence as it stands right now in this session.",
+    fields: [],
+    outputKind: "proba",
+    run: () => workspace.fetchCurrentSimpleProba(),
   },
 ];
 
@@ -271,6 +270,7 @@ export function blockById(id) {
 export function defaultParams(def) {
   const params = {};
   for (const field of def.fields) {
+    if (!("default" in field)) continue;
     params[field.key] = typeof field.default === "function" ? field.default() : structuredClone(field.default);
   }
   return params;

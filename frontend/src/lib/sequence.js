@@ -1,25 +1,14 @@
-// DNA sequence helpers shared by all three frontend proposals.
-// Mirrors validation rules from app/domain/calcul_function.py (IsValid) and
-// the mutation syntax from app/services/general_services.py.
+// DNA sequence helpers shared across the pipeline view.
+// Mirrors validation rules from app/domain/calcul_function.py (IsValid).
 
-const SEQUENCE_RE = /^[ACGTacgt]+$/;
-const MUTATION_RE = /^>p\.\d+\.[atgcATGC]>[atgcATGC]$/;
+const SEQUENCE_RE = /^[ACGTNacgtn]+$/;
 
 export function isValidSequence(sequence) {
   return typeof sequence === "string" && sequence.length > 0 && SEQUENCE_RE.test(sequence);
 }
 
-export function isValidMutation(mutation) {
-  return mutation === "" || MUTATION_RE.test(mutation);
-}
-
 export function cleanSequence(sequence) {
   return (sequence ?? "").trim().replace(/[\n\r\s]/g, "");
-}
-
-// Build a mutation string ">p.<pos>.<ref>><alt>" from parts (1-based position).
-export function buildMutation(position, ref, alt) {
-  return `>p.${position}.${ref.toLowerCase()}>${alt.toLowerCase()}`;
 }
 
 // Parse a single-record FASTA file's text content (Task 19).
@@ -37,9 +26,8 @@ export function buildMutation(position, ref, alt) {
 //   - Case/whitespace normalization of the final sequence reuses the
 //     existing `cleanSequence()`/`isValidSequence()` rather than
 //     reimplementing DNA validation here; callers should still run
-//     `isValidSequence()` on the result before using it (e.g. an all-`N`
-//     FASTA file parses fine here but is rejected by the existing strict
-//     ACGT-only validation — that's expected, not a bug in this parser).
+//     `isValidSequence()` on the result before using it (ACGTN only, any
+//     other character is rejected).
 //
 // Returns `{ name, sequence, error }` — `error` is null on success.
 export function parseFasta(text) {
@@ -81,26 +69,6 @@ export function parseFasta(text) {
   }
 
   return { name: name || "uploaded sequence", sequence, error: null };
-}
-
-// Parse ">p.8.a>c" -> { position: 8, ref: "a", alt: "c" }; null if malformed/empty.
-export function parseMutation(mutation) {
-  const m = /^>p\.(\d+)\.([atgcATGC])>([atgcATGC])$/.exec(mutation);
-  if (!m) return null;
-  return { position: Number(m[1]), ref: m[2].toLowerCase(), alt: m[3].toLowerCase() };
-}
-
-// Character-level diff between two same-scale sequences for highlighting.
-// Returns an array of { index, ref, alt, changed }.
-export function diffSequences(reference, altered) {
-  const len = Math.max(reference.length, altered.length);
-  const out = [];
-  for (let i = 0; i < len; i++) {
-    const ref = reference[i] ?? "";
-    const alt = altered[i] ?? "";
-    out.push({ index: i, ref, alt, changed: ref.toLowerCase() !== alt.toLowerCase() });
-  }
-  return out;
 }
 
 const BASE_COLORS = {
@@ -218,7 +186,7 @@ export function trackedEntryZone(label, entry) {
 //
 // Returns null if the label cannot be parsed.
 export function parseTrackedLabel(label) {
-  // Strip step prefix like "3: " or "5: " (Compare uses this format).
+  // Strip any step-number prefix from tracked-alteration labels.
   const body = label.replace(/^\d+:\s*/, "");
 
   // insert:{pattern}@{index}
@@ -311,45 +279,4 @@ export function parseTrackedAlterationDisplay(label, entry) {
 
   return { stepNum, opType, rangeText };
 }
-// Returns { mutations: string[], error: null } on success,
-// or { mutations: null, error: "message" } on failure.
-export function diffToPointMutations(before, after) {
-  if (!before || !after) {
-    return { mutations: null, error: "No sequence data available for this block. Run the recipe first." };
-  }
-  if (before.length !== after.length) {
-    return {
-      mutations: null,
-      error: `Cannot translate to point mutations: the operation changes sequence length (${before.length} → ${after.length} bp). Only same-length edits are representable as point mutations.`,
-    };
-  }
-  const mutations = [];
-  for (let i = 0; i < before.length; i++) {
-    const ref = before[i].toLowerCase();
-    const alt = after[i].toLowerCase();
-    if (ref !== alt) {
-      mutations.push(buildMutation(i + 1, ref, alt));
-    }
-  }
-  return { mutations, error: null };
-}
 
-export function downloadFile(filename, content, mime = "application/json") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-export function toCsv(rows, columns) {
-  const header = columns.map((c) => c.label).join(",");
-  const body = rows
-    .map((row) => columns.map((c) => JSON.stringify(c.value(row) ?? "")).join(","))
-    .join("\n");
-  return header + "\n" + body;
-}

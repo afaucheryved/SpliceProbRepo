@@ -1,7 +1,5 @@
-import { html, useState } from "../../lib/preact.js";
+import { html } from "../../lib/preact.js";
 import { MUTATION_MATRIX_BASES } from "../../api/client.js";
-
-const BASE_OPTIONS = ["a", "c", "g", "t"];
 
 function TextField({ field, value, onChange }) {
   return html`
@@ -50,97 +48,6 @@ function CheckboxField({ field, value, onChange }) {
         <input type="checkbox" checked=${!!value} onChange=${(e) => onChange(e.currentTarget.checked)} />
         ${field.label}
       </label>
-    </div>
-  `;
-}
-
-function MutationListField({ field, value, onChange, blockUid, onDropOnMutationList, onDropLibraryBlock }) {
-  const rows = value ?? [];
-  const [dropError, setDropError] = useState(null);
-  const [dropOver, setDropOver] = useState(false);
-  const update = (i, patch) => {
-    const next = rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
-    onChange(next);
-  };
-  const add = () => onChange([...rows, { position: rows.length + 1, ref: "a", alt: "c" }]);
-  const remove = (i) => onChange(rows.filter((_, idx) => idx !== i));
-
-  function handleDragOver(e) {
-    // Accept drops from already-placed recipe blocks (translate their
-    // before/after diff) and from the library palette (add + prompt to Bake
-    // first, since a library block has no diff to translate yet).
-    if (
-      !e.dataTransfer.types.includes("application/x-recipe-block-uid") &&
-      !e.dataTransfer.types.includes("application/x-block-id")
-    ) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    setDropOver(true);
-  }
-
-  function handleDragLeave(e) {
-    setDropOver(false);
-  }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDropOver(false);
-    setDropError(null);
-
-    const libraryBlockId = e.dataTransfer.getData("application/x-block-id");
-    if (libraryBlockId && onDropLibraryBlock) {
-      const result = onDropLibraryBlock(blockUid, libraryBlockId);
-      if (result && result.error) setDropError(result.error);
-      return;
-    }
-
-    const sourceUid = e.dataTransfer.getData("application/x-recipe-block-uid");
-    if (!sourceUid || !onDropOnMutationList) return;
-    const result = onDropOnMutationList(blockUid, sourceUid);
-    if (result && result.error) {
-      setDropError(result.error);
-    }
-  }
-
-  return html`
-    <div
-      class="field mutation-list ${dropOver ? "mutation-list--drop-target" : ""}"
-      onDragOver=${handleDragOver}
-      onDragLeave=${handleDragLeave}
-      onDrop=${handleDrop}
-    >
-      <label>
-        ${field.label}
-        <span class="field-hint"> — drag an Index-based or Pattern-based block here (from the recipe or the library) to append its mutations</span>
-      </label>
-      ${dropError ? html`<p class="recipe-block__error">⚠ ${dropError}</p>` : null}
-      ${rows.map(
-        (row, i) => html`
-          <div class="mutation-list__row" key=${i}>
-            <span class="mutation-list__prefix">>p.</span>
-            <input
-              type="number"
-              min="1"
-              class="mutation-list__pos"
-              value=${row.position}
-              onInput=${(e) => update(i, { position: parseInt(e.currentTarget.value || "1", 10) })}
-            />
-            <select value=${row.ref} onChange=${(e) => update(i, { ref: e.currentTarget.value })}>
-              ${BASE_OPTIONS.map((b) => html`<option value=${b}>${b}</option>`)}
-            </select>
-            <span>></span>
-            <select value=${row.alt} onChange=${(e) => update(i, { alt: e.currentTarget.value })}>
-              ${BASE_OPTIONS.map((b) => html`<option value=${b}>${b}</option>`)}
-            </select>
-            <button type="button" class="btn btn--small btn--danger" onClick=${() => remove(i)}>✕</button>
-          </div>
-        `
-      )}
-      <button type="button" class="btn btn--small" onClick=${add}>+ Add mutation</button>
-      ${rows.length === 0 ? html`<p class="field-hint">No mutations added — will score the unmutated baseline.</p>` : null}
     </div>
   `;
 }
@@ -243,31 +150,69 @@ function ModelSetField({ field, value, onChange }) {
   `;
 }
 
+function RadioGroupField({ field, value, onChange }) {
+  return html`
+    <div class="field">
+      <label>${field.label}</label>
+      <div class="field-row radio-group">
+        ${field.options.map((opt) => html`
+          <label key=${opt.value} class="radio-pill">
+            <input
+              type="radio"
+              name=${field.key}
+              value=${opt.value}
+              checked=${value === opt.value}
+              onChange=${() => onChange(opt.value)}
+            />
+            ${opt.label}
+          </label>
+        `)}
+      </div>
+    </div>
+  `;
+}
+
 const FIELD_COMPONENTS = {
   text: TextField,
   sequence: TextField,
   int: IntField,
   select: SelectField,
   checkbox: CheckboxField,
-  mutationList: MutationListField,
   matrix4x4: Matrix4x4Field,
   modelSet: ModelSetField,
   intList: IntListField,
+  radioGroup: RadioGroupField,
 };
 
-// Generic form renderer driven entirely by a block definition's `fields`
-// schema (see blockDefinitions.js) -- adding a new block never requires
-// touching this file.
-export function BlockForm({ def, params, onChange, blockUid, onDropOnMutationList, onDropLibraryBlock }) {
+export function BlockForm({ def, params, onChange }) {
   const setField = (key, value) => onChange({ ...params, [key]: value });
-  return html`
-    <div class="block-form">
-      ${def.fields
-        .filter((field) => !field.showIf || field.showIf(params))
-        .map((field) => {
-          const Field = FIELD_COMPONENTS[field.type] ?? TextField;
-          return html`<${Field} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} blockUid=${blockUid} onDropOnMutationList=${onDropOnMutationList} onDropLibraryBlock=${onDropLibraryBlock} />`;
-        })}
-    </div>
-  `;
+  const visible = def.fields.filter((field) => !field.showIf || field.showIf(params));
+
+  const elements = [];
+  for (let i = 0; i < visible.length; i++) {
+    const field = visible[i];
+    if (field.type === "groupStart") {
+      const label = field.label;
+      const groupFields = [];
+      i++;
+      while (i < visible.length && visible[i].type !== "groupEnd") {
+        groupFields.push(visible[i]);
+        i++;
+      }
+      elements.push(html`
+        <fieldset class="block-form__group" key=${field.key}>
+          <legend class="block-form__group-legend">${label}</legend>
+          ${groupFields.map((gf) => {
+            const Comp = FIELD_COMPONENTS[gf.type] ?? TextField;
+            return html`<${Comp} key=${gf.key} field=${gf} value=${params[gf.key]} onChange=${(v) => setField(gf.key, v)} />`;
+          })}
+        </fieldset>
+      `);
+    } else {
+      const Comp = FIELD_COMPONENTS[field.type] ?? TextField;
+      elements.push(html`<${Comp} key=${field.key} field=${field} value=${params[field.key]} onChange=${(v) => setField(field.key, v)} />`);
+    }
+  }
+
+  return html`<div class="block-form">${elements}</div>`;
 }

@@ -13,7 +13,6 @@
   --app-panel-alt: #1c212c;
   --danger: #ef4444;
   --success: #22c55e;
-  --category-scoring: #eab308;
   --category-analysis: #06b6d4;
 
   --text-muted: #9ca3af;
@@ -43,7 +42,6 @@
   --app-panel-alt: #f3f4f6;
   --danger: #dc2626;
   --success: #16a34a;
-  --category-scoring: #b45309;
   --category-analysis: #0e7490;
 
   --text-muted: #6b7280;
@@ -124,51 +122,6 @@ button {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-
-/* ---- Segmented control (3-way toggle) ---- */
-
-.segmented-control {
-  display: inline-flex;
-  background: var(--app-panel-alt);
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.segmented-control__option {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  padding: 0.4rem 0.9rem;
-  border-radius: 999px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.15;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.segmented-control__option:hover {
-  color: var(--app-fg);
-}
-
-.segmented-control__option.is-active {
-  background: var(--app-accent);
-  color: white;
-}
-
-.segmented-control__label {
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.segmented-control__hint {
-  font-size: 0.65rem;
-  opacity: 0.8;
 }
 
 /* ---- Buttons / forms ---- */
@@ -287,6 +240,27 @@ label {
 
 .session-bar__ensembl-input {
   width: 11rem;
+}
+
+.session-bar__copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  align-self: flex-start;
+}
+
+.session-bar__copy-btn:hover {
+  border-color: var(--app-accent);
+  color: var(--app-fg);
 }
 
 /* ---- Tracked Alteration delta-bar output (Task 20) ---- */

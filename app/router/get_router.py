@@ -49,11 +49,15 @@ async def get_simpleproba(session_id: str = Query(..., description="Session ID f
             mutations=[],
             session_id=session_id,
         )
-        if gv.there_is_change == False:
-            return gv.proba_simple
-        else:
-            gv.proba_simple = gv.return_proba_simple()
-            return gv.proba_simple
+        # `there_is_change` is an in-memory flag on the alteration methods and
+        # is never persisted to Redis, while `create_internal_variant()` above
+        # always reconstructs a fresh instance per request -- so the flag is
+        # unconditionally False here regardless of prior structural
+        # alterations in this session, and the old `if gv.there_is_change`
+        # branch on it never actually recomputed anything. Always score the
+        # session's live altered sequence instead.
+        gv.proba_simple = gv.return_proba_simple(using_altered_sequence=True)
+        return gv.proba_simple
     except Exception as e:
         raise Exception(f"Fail to get the 'simple_proba' of the current 'internal genetic variant' : {e}")
 

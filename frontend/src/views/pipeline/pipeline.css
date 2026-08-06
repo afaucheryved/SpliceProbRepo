@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  padding: 1rem 1.5rem;
+  padding: 1rem 0 1rem 1.5rem;
   flex: 1;
   min-height: 0;
 }
@@ -65,11 +65,29 @@
   min-height: 0;
 }
 
-.pipeline-view__output {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+.pipeline-view__resize-handle--vertical {
+  cursor: row-resize;
+  position: relative;
+  height: 8px;
+  min-height: 8px;
+  flex-shrink: 0;
+}
+
+.pipeline-view__resize-handle--vertical::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--app-border);
+  transition: background 0.1s ease;
+}
+
+.pipeline-view__resize-handle--vertical:hover::after,
+.pipeline-view__resize-handle--vertical:active::after {
+  background: var(--app-accent);
 }
 
 .output__stop-btn {
@@ -78,6 +96,21 @@
 }
 
 /* ---- Block library ---- */
+
+.block-library__section + .block-library__section {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--app-border);
+}
+
+.block-library__section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--app-fg);
+  margin: 0;
+}
 
 .block-library__category {
   font-size: 0.68rem;
@@ -227,18 +260,9 @@
   padding: 0.05rem 0.45rem;
 }
 
-.recipe-block__category--scoring {
-  color: var(--category-scoring);
-  border-color: var(--category-scoring);
-}
-
 .recipe-block__category--analysis {
   color: var(--category-analysis);
   border-color: var(--category-analysis);
-}
-
-.block-library__item--scoring {
-  border-left: 3px solid var(--category-scoring);
 }
 
 .block-library__item--analysis {
@@ -258,6 +282,13 @@
 .recipe-block__status--success { color: var(--success); }
 .recipe-block__status--error { color: var(--danger); }
 .recipe-block__status--running { color: var(--app-accent); }
+.recipe-block__status--cancelled { color: var(--text-muted); }
+
+.recipe-block__progress {
+  color: var(--app-accent);
+  font-size: 0.72rem;
+  margin: 0.2rem 0;
+}
 
 .recipe-block__error {
   color: var(--danger-light);
@@ -308,36 +339,12 @@
 }
 
 /* Plain text/number/select inputs in a recipe block's form — reduced to
-   ~1/3 width. Matrix/mutation-list fields keep their own dedicated widths
-   (they don't carry the .field__control class). */
+   ~1/3 width. The matrix field keeps its own dedicated width (it doesn't
+   carry the .field__control class). */
 .recipe-block .field__control {
   width: 33%;
   min-width: 3.5rem;
   align-self: flex-start;
-}
-
-.mutation-list__row {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-bottom: 0.3rem;
-}
-
-.mutation-list__prefix {
-  font-family: var(--font-mono);
-  color: var(--text-subtle);
-  font-size: 0.75rem;
-}
-
-.mutation-list__pos {
-  width: 4.5rem;
-}
-
-.mutation-list--drop-target {
-  outline: 2px dashed var(--app-accent, #6366f1);
-  outline-offset: 2px;
-  border-radius: 6px;
-  background: rgba(99, 102, 241, 0.06);
 }
 
 .matrix-field {
@@ -402,4 +409,140 @@
   border: none;
   border-top: 2px solid var(--app-border);
   margin: 0.85rem 0;
+}
+
+/* ---- Block form bordered sections ---- */
+
+.block-form__group {
+  border: 1px solid var(--app-border);
+  border-radius: 3px;
+  padding: 0.6rem 0.65rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.block-form__group-legend {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  padding: 0 0.35rem;
+}
+
+/* ---- Radio group (styled as pills) ---- */
+
+.radio-group {
+  gap: 0.4rem;
+}
+
+.radio-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  width: auto;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.radio-pill:has(input:checked) {
+  border-color: var(--app-accent);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.radio-pill input[type="radio"] {
+  accent-color: var(--app-accent);
+  margin: 0;
+}
+
+/* ---- Export button ---- */
+
+.export-btn {
+  position: relative;
+  display: inline-flex;
+}
+
+.export-btn__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--app-panel-alt);
+  border: 1px solid var(--app-border);
+  border-radius: 3px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-subtle);
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+
+.export-btn__trigger:hover {
+  border-color: var(--app-accent);
+  color: var(--app-fg);
+}
+
+.export-btn__icon {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.export-btn__arrow {
+  font-size: 0.6rem;
+}
+
+.export-btn__menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+  min-width: 5rem;
+  overflow: hidden;
+}
+
+.export-btn__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.72rem;
+  color: var(--app-fg);
+  cursor: pointer;
+}
+
+.export-btn__item:hover {
+  background: var(--app-panel-alt);
+  color: var(--app-accent);
+}
+
+/* ---- Output section header (hint + export) ---- */
+
+.output-panel__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.output-panel__section-header .output-panel__hint {
+  flex: 1;
+  margin: 0;
+}
+
+/* ---- Recipe block action buttons ---- */
+
+.recipe-block__action {
+  margin-top: 0.5rem;
 }

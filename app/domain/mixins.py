@@ -61,6 +61,7 @@ class AlteredSequenceTrackerMixin:
         human_label: str,
         match_start: int | None = None,
         match_end: int | None = None,
+        skip_proba: bool = False,
     ) -> None:
         """Persist information about the latest alteration.
 
@@ -101,7 +102,10 @@ class AlteredSequenceTrackerMixin:
 
         # Simple probability dictionary for the altered sequence.
         # ``result_per_seqences`` expects the flag ``using_altered_seqence``.
-        proba = self.result_per_sequences(using_altered_sequence=True)
+        if skip_proba:
+            proba = {}
+        else:
+            proba = self.result_per_sequences(using_altered_sequence=True)
 
         # SpliceAI mutation label(s) – may be multiple if more than one base
         # changed between the base and altered sequences. ``tuple_mutation``
@@ -121,13 +125,14 @@ class AlteredSequenceTrackerMixin:
         # edit) -- entries that don't qualify simply omit "delta_proba" and
         # the frontend falls back to the absolute-probability chart for them.
         delta_proba = None
-        self_sequence = getattr(self, "sequence", "")
-        if len(self_sequence) == len(altered_seq) and altered_seq:
-            try:
-                base_proba = self.result_per_sequences(using_altered_sequence=False)
-                delta_proba = compute_delta_result(self_sequence, altered_seq, base_proba, proba)
-            except Exception:
-                delta_proba = None
+        if not skip_proba:
+            self_sequence = getattr(self, "sequence", "")
+            if len(self_sequence) == len(altered_seq) and altered_seq:
+                try:
+                    base_proba = self.result_per_sequences(using_altered_sequence=False)
+                    delta_proba = compute_delta_result(self_sequence, altered_seq, base_proba, proba)
+                except Exception:
+                    delta_proba = None
 
         # Retrieve the existing list of tracked alterations.
         altered_list: List[Dict[str, Any]] = (

@@ -199,3 +199,85 @@ export function aggregateBarSeries({ labels, datasets, threshold = AGGREGATION_T
 
   return { labels: newLabels, datasets: newDatasets, indexMap, isCompressedAt };
 }
+
+// Scans a numeric array for local maxima — positions where the value is
+// strictly greater than both its immediate neighbors. Returns an array of
+// { index, value } sorted by absolute magnitude descending so the most
+// prominent peaks are checked first by nearest-peak lookups.
+export function findLocalMaxima(data) {
+  const peaks = [];
+  const n = data.length;
+  if (n < 3) return peaks;
+  for (let i = 1; i < n - 1; i++) {
+    const v = data[i];
+    if (v == null || Number.isNaN(v)) continue;
+    const prev = data[i - 1];
+    const next = data[i + 1];
+    if (prev == null || next == null || Number.isNaN(prev) || Number.isNaN(next)) continue;
+    if (v > prev && v > next) {
+      peaks.push({ index: i, value: v });
+    }
+  }
+  peaks.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  return peaks;
+}
+
+// Given a pre-computed peak list, the chart's x-scale, the mouse pixel X
+// coordinate, and the chart area, finds the most "attractive" peak using a
+// magnitude-weighted score so prominent peaks pull the cursor from farther
+// away than noise bumps.
+//
+// Every peak within `baseRadiusPercent` (default 8% of chart width) is
+// scored as:  score = pixelDistance / (|value| + epsilon)
+// The lowest score wins — close, large peaks beat far, small ones.
+// Returns { index, value } or null.
+export function findNearestPeakByPercent(peaks, xScale, mousePixelX, chartArea, baseRadiusPercent = 0.08) {
+  if (!peaks.length || !xScale || !chartArea) return null;
+  const chartWidth = chartArea.right - chartArea.left;
+  if (chartWidth <= 0) return null;
+  const radiusPx = chartWidth * baseRadiusPercent;
+
+  let best = null;
+  let bestScore = Infinity;
+  for (const peak of peaks) {
+    const peakPx = xScale.getPixelForValue(peak.index);
+    if (peakPx == null) continue;
+    const dist = Math.abs(peakPx - mousePixelX);
+    if (dist > radiusPx) continue;
+    const magnitude = Math.abs(peak.value);
+    const score = dist / (magnitude + 1e-12);
+    if (score < bestScore) {
+      bestScore = score;
+      best = peak;
+    }
+  }
+  return best;
+}
+
+// Finds local minima (valleys) — for delta charts where negative spikes
+// matter. Same contract as findLocalMaxima but for v < prev && v < next.
+export function findLocalMinima(data) {
+  const valleys = [];
+  const n = data.length;
+  if (n < 3) return valleys;
+  for (let i = 1; i < n - 1; i++) {
+    const v = data[i];
+    if (v == null || Number.isNaN(v)) continue;
+    const prev = data[i - 1];
+    const next = data[i + 1];
+    if (prev == null || next == null || Number.isNaN(prev) || Number.isNaN(next)) continue;
+    if (v < prev && v < next) {
+      valleys.push({ index: i, value: v });
+    }
+  }
+  valleys.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  return valleys;
+}
+
+// Merges peaks and valleys into one sorted-by-magnitude list — useful for
+// delta bar charts where both positive and negative spikes are meaningful.
+export function findLocalExtrema(data) {
+  const all = [...findLocalMaxima(data), ...findLocalMinima(data)];
+  all.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  return all;
+}

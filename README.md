@@ -25,11 +25,12 @@ A FastAPI-based backend for computing splicing probabilities and analyzing seque
 pip install -r requirements.txt
 ```
 
-### Running the Server
+### Running the app
 
 ```bash
-fastapi dev app/main.py
+./myapp run
 ```
+Then open http://127.0.0.1:5500 in browser.
 
 The interactive API docs will be available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
@@ -44,72 +45,6 @@ Set these environment variables to configure Redis:
 | `REDIS_DB`     | `0`         | Redis database index   |
 
 If Redis is not available, the application falls back to an in-memory dictionary store.
-
-## API Endpoints
-
-### Core Probabilities
-
-| Method | Endpoint                     | Description                                     |
-|--------|------------------------------|-------------------------------------------------|
-| POST   | `/GetSimpleProb/`            | Baseline acceptor/donor probabilities           |
-| POST   | `/GetDeltaScore/`            | Delta (difference) in splicing scores           |
-| POST   | `/resetgv`                   | Reset internal genetic variant                  |
-| GET    | `/get/sequence`              | Get current sequence                            |
-| GET    | `/get/simpleproba`           | Get simple probabilities                        |
-| GET    | `/get/deltaproba`            | Get delta probabilities                         |
-| GET    | `/get/mutations`             | Get applied mutations                           |
-| GET    | `/get/alteredsequence`       | Get altered sequence                            |
-| GET    | `/get/gv`                    | Get full variant state                          |
-
-### Sequence Alteration by Index
-
-| Method | Endpoint                         | Description                            |
-|--------|----------------------------------|----------------------------------------|
-| POST   | `/altbyindex/delete`             | Delete bases by start/end or length    |
-| POST   | `/altbyindex/insert`             | Insert a pattern at a given index      |
-| POST   | `/altbyindex/move`               | Cut-and-paste a subsequence            |
-| POST   | `/altbyindex/copypast`           | Copy-and-paste a subsequence           |
-
-> **Note**: The legacy endpoint `/altbyindex/delet` is kept as an alias for backward compatibility.
-
-### Sequence Alteration by Pattern
-
-| Method | Endpoint                           | Description                                  |
-|--------|------------------------------------|----------------------------------------------|
-| POST   | `/altbypattern/replace`            | Replace a pattern (supports wildcards)       |
-| POST   | `/altbypattern/delete`             | Delete a pattern (supports wildcards)        |
-
-Wildcards:
-- `_` — matches exactly one base (e.g., `a_c` matches `atc`, `agc`)
-- `%(n)` — matches up to `n` bases (e.g., `a%(3)g` matches `a...g` with up to 3 bases in between)
-- `%` — matches any sequence (0 to infinity)
-
-> **Note**: The legacy endpoint `/altbypattern/delet` is kept as an alias for backward compatibility.
-
-### Random Mutation
-
-| Method | Endpoint                 | Description                                        |
-|--------|--------------------------|----------------------------------------------------|
-| POST   | `/mutateindependently`   | Mutate each base independently per a 4×4 matrix    |
-
-### Genomic Analysis
-
-| Method | Endpoint                        | Description                                        |
-|--------|---------------------------------|----------------------------------------------------|
-| POST   | `/analysis/patterninzona`       | Zone detection + impactful mutation pattern search |
-
-## Running Tests
-
-```bash
-# Run all tests
-python -m pytest app/test/ -v
-
-# Run specific test file
-python -m pytest app/test/test_alteration_functions.py -v
-
-# Run with coverage
-python -m pytest app/test/ --cov=app -v
-```
 
 ## Project Structure
 
@@ -136,6 +71,64 @@ app/
 ## Session Management
 
 Each API call can include an optional `session_id` parameter. If provided, the variant state is persisted in Redis and can be retrieved across multiple requests. This enables multi-user isolation and stateful workflows.
+
+## Step-by-Step Example: Discovering Splicing-Regulatory Substrings
+
+This example demonstrates how to identify the subsequences that regulate the splicing of an exon.
+
+**Context:** The user does not know the exact start and end positions of the exon they want to analyze.
+
+1. After running the command described in the **"Running the App"** section, the user opens the application in their web browser and clicks the **"New Session"** button located in the top-right corner of the header.
+
+2. The user loads the sequence they want to analyze by either:
+
+   * entering an Ensembl ID,
+   * uploading a `.fasta` file, or
+   * pasting a raw DNA sequence directly.
+
+   Then, they click **"Load Sequence"**.
+
+3. Since the user does not remember the exact locations of the 3' splice site (3'ss) and 5' splice site (5'ss), they drag and drop the **"Baseline Probability"** function block from **Operations → Analysis** into the **Recipe** area.
+
+4. The user clicks the **"Bake"** button.
+
+5. They identify the 3'ss and 5'ss peaks displayed on the generated charts.
+
+6. The **Baseline Probability** block is no longer needed. The user can either:
+
+   * uncheck the block to temporarily hide it, or
+   * click the red **×** button to remove it completely.
+
+7. Next, the user drags and drops the **"Windows By Splicing Regulation"** function block into the Recipe area. They then enter the exon start and end positions.
+
+   The available parameter sections are:
+
+   * **EXON**
+
+     * Defines the exon coordinates to analyze.
+
+   * **WORKING INTERVAL**
+
+     * Defines the sequence interval in which the algorithm searches for splicing-regulatory substrings. By default, the entire sequence is used.
+
+   * **GENERAL ALGORITHM SETTINGS**
+
+     * **Window size:** The length of the candidate regulatory substring. You can test multiple window sizes.
+     * **Batch size:** Reduce this value to around **10–20** for very large sequences (approximately 10,000–100,000 bp). Values between **30 and 60** are generally suitable for smaller sequences.
+     * **SpliceAI models:** Using **all models** provides the most reliable results, although it requires more computation time. Using only one or two models may produce significantly different results.
+     * **Number of output windows:** The number of top-ranked candidate windows (substrings) that have the greatest predicted impact on the splice sites.
+
+   * **PRESET ALGORITHM SETTINGS**
+
+     * These settings determine which regions are prioritized before running the main algorithm. A higher **Keep proportion** reduces the risk of excluding an important region. For long sequences (approximately 10,000–100,000 bp), it is recommended to multiply the default preset values by **10**, except for **Keep proportion**, which should usually remain unchanged.
+
+8. After clicking **"Bake"**, the user can:
+
+   * visualize the predicted splicing-regulatory substrings on the sequence,
+   * download the raw output data, and
+   * export a PNG image of the generated plot.
+
+
 
 ## License
 

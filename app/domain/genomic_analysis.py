@@ -191,9 +191,10 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
 
         def acgt(b_mut):
             mapping = {"A": 0, "C": 1, "G": 2, "T": 3}
-            if b_mut in mapping:
-                return mapping[b_mut]
-            raise ValueError("Only ACGT is allowed")
+            b_upper = b_mut.upper()
+            if b_upper in mapping:
+                return mapping[b_upper]
+            raise ValueError(f"Unexpected base '{b_mut}': only ACGT is allowed")
 
         output = {
             "donor": [[0.0] * seq_len for _ in range(4)],
@@ -204,6 +205,8 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
 
         mutations_to_batches: dict = {} # id : [sequence, from_base] --> the id is the position of the muted base.
         for id, b_o in enumerate(sequence):
+            if b_o.upper() == "N":
+                continue
             for b_mut in "ACGT":
                 if b_mut != sequence[id]:
 
@@ -379,7 +382,8 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
                                first_search_step: int = 10,
                                keep_prop: percentage = 30,
                                top_more_relevent: int = 10,
-                               search_activator_repressor: str = "repressor")-> JSON:
+                               search_activator_repressor: str = "repressor",
+                               progress_callback = None)-> JSON:
 
         """
         Mask sliding intervals of the sequence with 'N's -- the exon/intron boundary
@@ -449,7 +453,11 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
         window_scores: dict[tuple[int, int], dict] = {}
         windows = list(troncated_sequences.keys())
         for i in range(0, len(windows), batch_size):
-            print(f"\n batch # {i//batch_size} / {len(windows)//batch_size +1}")
+            current_batch_idx = i // batch_size
+            total_batches = (len(windows) + batch_size - 1) // batch_size
+            print(f"\n batch # {current_batch_idx} / {total_batches}")
+            if progress_callback is not None:
+                progress_callback(current_batch_idx, total_batches)
             batch_keys = windows[i:i+batch_size]
             batch = [troncated_sequences[key] for key in batch_keys]
             # proba run
@@ -467,7 +475,7 @@ class SpotPositionFunctions: # à faire heriter à la classe internalgeneticvari
                         "acceptor": baseprob_acceptor/value[exon[0]][1],
                         "subsequence": sequence[key[0]:key[1]],
                     }
-        # return only the more relevants (only in final version, use 'return window_scores' for backend test instead)
+
         build_segments: list[dict] = []
         for k in ("donor", "acceptor"):
             top_n_by_impact = sorted(window_scores.items(), key=lambda item: abs(item[1][k]), reverse=True)[:top_more_relevent]

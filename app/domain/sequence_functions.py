@@ -288,6 +288,7 @@ class AlterationFunctionsByPattern(AlteredSequenceTrackerMixin):
                     f"{label_prefix}[match {i}/{n}]@{match.start() + 1}",
                     match_start=match.start(),
                     match_end=max(match.start(), match.end() - 1),
+                    skip_proba=True,
                 )
         finally:
             self.altered_sequence = saved_altered_sequence

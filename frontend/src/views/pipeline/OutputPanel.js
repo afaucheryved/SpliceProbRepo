@@ -2,24 +2,73 @@ import { h, html, useEffect, useRef } from "../../lib/preact.js";
 import ChartJS from "https://esm.sh/chart.js@4.4.4/auto";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
+import { ExportButton, tableToCsv, sequenceToText } from "../../components/shared/ExportButton.js";
 import { useWorkspace } from "../../lib/workspace.js";
 import { useTheme, seriesColors } from "../../lib/theme.js";
 import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone, parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
 
-// Best-effort parse of a pattern-in-zona dict key. The backend's return
-// type is `dict[set[mut], float]` but the actual runtime keys are Python
-// tuples of mutation strings; once JSON-serialized they arrive as a
-// stringified tuple repr, e.g. "('>p.5.a>g', '>p.6.t>c')".
-function parseZoneKey(key) {
-  const matches = [...key.matchAll(/'(>p\.\d+\.[a-zA-Z]>[a-zA-Z])'/g)].map((m) => m[1]);
-  return matches.length ? matches.join(", ") : key;
+function exportCsv(filename, columns, rows) {
+  const csv = tableToCsv(columns, rows);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportTxt(filename, content) {
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename + ".txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportPng(canvases, filename) {
+  if (!canvases || canvases.length === 0) return;
+  const width = Math.max(...canvases.map((c) => c.width));
+  const totalHeight = canvases.reduce((sum, c) => sum + c.height, 0);
+  const composite = document.createElement("canvas");
+  composite.width = width;
+  composite.height = totalHeight;
+  const ctx = composite.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, composite.width, composite.height);
+  let y = 0;
+  for (const c of canvases) {
+    ctx.drawImage(c, 0, y);
+    y += c.height;
+  }
+  const link = document.createElement("a");
+  link.download = filename + ".png";
+  link.href = composite.toDataURL("image/png");
+  link.click();
 }
 
 function SequenceOutput({ sequence, operations }) {
   const ws = useWorkspace();
+  const handleExport = (format) => {
+    if (format === "csv") {
+      const rows = sequence.split("").map((char, i) => ({ position: i + 1, base: char }));
+      exportCsv("sequence", ["position", "base"], rows);
+    } else if (format === "txt") {
+      exportTxt("sequence", sequence);
+    }
+  };
   return html`
-    <div>
-      <p class="output-panel__hint">Resulting sequence after this recipe step (diff vs. the original base sequence):</p>
+    <div class="output-panel__section">
+      <div class="output-panel__section-header">
+        <p class="output-panel__hint">Resulting sequence after this recipe step (diff vs. the original base sequence):</p>
+        <${ExportButton} onExport=${handleExport} hidePng=${true} />
+      </div>
       <${SequenceTrack} sequence=${sequence} reference=${ws.baseSequence} operations=${operations} />
     </div>
   `;
@@ -35,30 +84,54 @@ function ProbaOutput({ data, sequence }) {
   const colors = seriesColors(theme);
   const acceptor = flattenProbaTrack(data.acceptor_proba);
   const donor = flattenProbaTrack(data.donor_proba);
+
+  const csvColumns = ["position", "acceptor_probability", "donor_probability"];
+  const csvRows = [];
+  const allPositions = new Set([...acceptor.positions, ...donor.positions]);
+  for (const p of [...allPositions].sort((a, b) => a - b)) {
+    csvRows.push({
+      position: p + 1,
+      acceptor_probability: acceptor.values[acceptor.positions.indexOf(p)] ?? "",
+      donor_probability: donor.values[donor.positions.indexOf(p)] ?? "",
+    });
+  }
+
+  const handleExport = (format) => {
+    if (format === "csv") exportCsv("baseline_probability", csvColumns, csvRows);
+    else if (format === "txt") exportTxt("baseline_probability", JSON.stringify(data, null, 2));
+    else if (format === "png") {
+      const canvases = document.querySelectorAll(".output-panel__section canvas");
+      if (canvases.length) exportPng([...canvases], "baseline_probability");
+    }
+  };
+
   return html`
-    <div>
-      <p class="output-panel__hint">
-        Baseline splicing probability is quantitative → rendered as a chart instead of a raw sequence.
-      </p>
+    <div class="output-panel__section">
+      <div class="output-panel__section-header">
+        <p class="output-panel__hint">
+          Baseline splicing probability is quantitative — rendered as a chart instead of a raw sequence.
+        </p>
+        <${ExportButton} onExport=${handleExport} />
+      </div>
       <${Chart}
         type="line"
-        height=${160}
+        height=${260}
         labels=${acceptor.positions.map((p) => p + 1)}
         datasets=${[
-          { label: "Acceptor gain", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, borderWidth: 1.5 },
+{ label: "acceptor (3ss) probability", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, pointHitRadius: 15, borderWidth: 1.5 },
         ]}
-        companionDatasets=${[{ label: "Donor gain", positions: donor.positions, values: donor.values }]}
+        companionDatasets=${[{ label: "donor (5ss) probability", positions: donor.positions, values: donor.values }]}
         options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Acceptor probability" } } } }}
         sequence=${sequence}
       />
       <${Chart}
         type="line"
-        height=${160}
+        height=${260}
         labels=${donor.positions.map((p) => p + 1)}
         datasets=${[
-          { label: "Donor gain", data: donor.values, borderColor: colors.donor, pointRadius: 0, borderWidth: 1.5 },
+{ label: "donor (5ss) probability", data: donor.values, borderColor: colors.donor, pointRadius: 0, pointHitRadius: 15, borderWidth: 1.5 },
         ]}
-        companionDatasets=${[{ label: "Acceptor gain", positions: acceptor.positions, values: acceptor.values }]}
+        companionDatasets=${[{ label: "acceptor (3ss) probability", positions: acceptor.positions, values: acceptor.values }]}
         options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Donor probability" } } } }}
         sequence=${sequence}
       />
@@ -93,11 +166,11 @@ export function TrackedAlterationEntry({ label, entry }) {
         <p class="field-hint">Delta view not available — this operation changes the sequence length.</p>
         <${Chart}
           type="line"
-          height=${160}
+          height=${260}
           labels=${acceptor.positions.map((p) => p + 1)}
           datasets=${[
-            { label: "Acceptor gain", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, borderWidth: 1.5 },
-            { label: "Donor gain", data: donor.values, borderColor: colors.donor, pointRadius: 0, borderWidth: 1.5 },
+{ label: "acceptor (3ss) probability", data: acceptor.values, borderColor: colors.acceptor, pointRadius: 0, pointHitRadius: 15, borderWidth: 1.5 },
+{ label: "donor (5ss) probability", data: donor.values, borderColor: colors.donor, pointRadius: 0, pointHitRadius: 15, borderWidth: 1.5 },
           ]}
           options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Probability" } } } }}
           sequence=${entrySeq}
@@ -116,7 +189,7 @@ export function TrackedAlterationEntry({ label, entry }) {
       ${range ? html`<p class="field-hint output-panel__zone-hint">tracked mutation</p>` : null}
       <${Chart}
         type="bar"
-        height=${140}
+        height=${240}
         labels=${acceptor.positions.map((p) => p + 1)}
         datasets=${[
           {
@@ -127,12 +200,15 @@ export function TrackedAlterationEntry({ label, entry }) {
             borderWidth: acceptorZone.borderWidth,
           },
         ]}
-        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ acceptor probability" } } } }}
+        options=${{
+          scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ acceptor probability" } } },
+          plugins: { legend: { labels: { generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({ text: ds.label, fillStyle: "transparent", strokeStyle: "transparent", hidden: false, index: i })) } } },
+        }}
         sequence=${entrySeq}
       />
       <${Chart}
         type="bar"
-        height=${140}
+        height=${240}
         labels=${donor.positions.map((p) => p + 1)}
         datasets=${[
           {
@@ -143,7 +219,10 @@ export function TrackedAlterationEntry({ label, entry }) {
             borderWidth: donorZone.borderWidth,
           },
         ]}
-        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ donor probability" } } } }}
+        options=${{
+          scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ donor probability" } } },
+          plugins: { legend: { labels: { generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({ text: ds.label, fillStyle: "transparent", strokeStyle: "transparent", hidden: false, index: i })) } } },
+        }}
         sequence=${entrySeq}
       />
     </div>
@@ -153,41 +232,49 @@ export function TrackedAlterationEntry({ label, entry }) {
 function ProbaHistoryOutput({ data, params }) {
   const entries = Object.entries(data ?? {});
   if (entries.length === 0) {
-    return html`<p class="output-panel__hint">No alterations tracked yet in this session — run an Index-based or Pattern-based block first.</p>`;
+    return html`<p class="output-panel__hint">No alterations tracked yet in this session — run a Sequence Modification block first.</p>`;
   }
 
   let renderedEntries = entries;
-  if (params?.showTopOnly && entries.length > 0) {
+  const useTopN = params?.entityFilter === "topN";
+  if (useTopN && entries.length > 0) {
     renderedEntries = topTrackedEntries(data, params.topN).map((s) => [s.label, s.entry]);
   }
-  return html`
-    <div>
-      <p class="output-panel__hint">
-        Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
-      </p>
-      ${renderedEntries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
-    </div>
-  `;
-}
 
-function DeltaOutput({ data, sequence }) {
-  const theme = useTheme();
-  const colors = seriesColors(theme);
-  const acceptor = flattenDeltaTrack(data.acceptor_proba);
-  const donor = flattenDeltaTrack(data.donor_proba);
+  const allStats = renderedEntries.map(([label, entry]) => {
+    const disp = parseTrackedAlterationDisplay(label, entry);
+    let aMax = 0, dMax = 0;
+    if (entry.delta_proba) {
+      const a = flattenDeltaTrack(entry.delta_proba.acceptor_proba);
+      const d = flattenDeltaTrack(entry.delta_proba.donor_proba);
+      aMax = a.values.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+      dMax = d.values.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+    }
+    return {
+      label: disp ? `${disp.stepNum} : ${disp.opType} : ${disp.rangeText}` : label,
+      acceptor_max_delta: aMax,
+      donor_max_delta: dMax,
+    };
+  });
+
+  const handleExport = (format) => {
+    if (format === "csv") exportCsv("delta_scores", ["alteration", "acceptor_max_delta", "donor_max_delta"], allStats);
+    else if (format === "txt") exportTxt("delta_scores", JSON.stringify(data, null, 2));
+    else if (format === "png") {
+      const canvases = document.querySelectorAll(".output-panel__section canvas");
+      if (canvases.length) exportPng([...canvases], "delta_scores");
+}
+  };
+
   return html`
-    <div>
-      <p class="output-panel__hint">Delta score is quantitative → rendered as a chart.</p>
-      <${Chart}
-        type="bar"
-        labels=${acceptor.positions.map((p) => p + 1)}
-        datasets=${[
-          { label: "Δ acceptor", data: acceptor.values, backgroundColor: colors.deltaAcceptor },
-          { label: "Δ donor", data: donor.values, backgroundColor: colors.deltaDonor },
-        ]}
-        options=${{ scales: { x: { title: { display: true, text: "Position" } }, y: { title: { display: true, text: "Δ probability" } } } }}
-        sequence=${sequence}
-      />
+    <div class="output-panel__section">
+      <div class="output-panel__section-header">
+        <p class="output-panel__hint">
+          Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
+        </p>
+        <${ExportButton} onExport=${handleExport} />
+      </div>
+      ${renderedEntries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
     </div>
   `;
 }
@@ -354,6 +441,7 @@ function RubberWindowChart({ donorSegments, acceptorSegments, sequenceLength, ex
       },
       options: {
         indexAxis: "y",
+        interaction: { mode: "nearest", intersect: false, axis: "x" },
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
@@ -477,35 +565,31 @@ function RubberWindowOutput({ data }) {
     ...acceptorSegments.map((seg, i) => ({ ...seg, rank: i + 1 })),
   ];
 
+const handleExport = (format) => {
+    if (format === "csv") {
+      exportCsv("rubber_windows", ["Type", "Rank", "Start", "End", "Value", "Subsequence"], rows);
+    } else if (format === "txt") {
+      exportTxt("rubber_windows", JSON.stringify(data, null, 2));
+    } else if (format === "png") {
+      const canvases = document.querySelectorAll(".output-panel__section canvas");
+      if (canvases.length) exportPng([...canvases], "rubber_windows");
+    }
+  };
+
   return html`
-    <div>
-      <p class="output-panel__hint">
-        Top ${donorSegments.length} donor and top ${acceptorSegments.length} acceptor windows, ranked together by signed
-        score (not by type) -- the dashed "0 level" line marks where the score crosses from positive to negative. Each
-        bar spans the masked ("N"-filled) window, with its start/end position flanking it and the replaced subsequence
-        written inside; hover for the exact score delta.
-      </p>
+    <div class="output-panel__section">
+      <div class="output-panel__section-header">
+        <p class="output-panel__hint">
+          Top ${donorSegments.length} donor and top ${acceptorSegments.length} acceptor windows, ranked together by signed
+          score (not by type) — the dashed "0 level" line marks where the score crosses from positive to negative. Each
+          bar spans the masked ("N"-filled) window, with its start/end position flanking it and the replaced subsequence
+          written inside; hover for the exact score delta.
+        </p>
+        <${ExportButton} onExport=${handleExport} />
+      </div>
       <${RubberWindowChart} donorSegments=${donorSegments} acceptorSegments=${acceptorSegments} sequenceLength=${sequenceLength} exon=${exon} />
       <${RubberWindowLegend} colors=${colors} />
       <${RubberWindowTable} rows=${rows} />
-    </div>
-  `;
-}
-
-function ZonesOutput({ data }) {
-  const rows = Object.entries(data ?? {})
-    .map(([key, score]) => ({ pattern: parseZoneKey(key), score }))
-    .sort((a, b) => b.score - a.score);
-  return html`
-    <div>
-      <p class="output-panel__hint">Ranked mutation patterns within the detected high-impact zones.</p>
-      <table class="data-table">
-        <thead><tr><th>Mutation pattern</th><th>Impact score</th></tr></thead>
-        <tbody>
-          ${rows.map((r, i) => html`<tr key=${i}><td class="mono">${r.pattern}</td><td>${r.score.toFixed(5)}</td></tr>`)}
-        </tbody>
-      </table>
-      ${rows.length === 0 ? html`<p class="output-panel__hint">No zones met the significance threshold.</p>` : null}
     </div>
   `;
 }
@@ -526,8 +610,6 @@ export function OutputPanel({ result }) {
       ${kind === "sequence" ? html`<${SequenceOutput} sequence=${data} operations=${ops} />` : null}
       ${kind === "proba" ? html`<${ProbaOutput} data=${data} sequence=${seq} />` : null}
       ${kind === "probaHistory" ? html`<${ProbaHistoryOutput} data=${data} params=${r.params} />` : null}
-      ${kind === "delta" ? html`<${DeltaOutput} data=${data} sequence=${seq} />` : null}
-      ${kind === "zones" ? html`<${ZonesOutput} data=${data} />` : null}
       ${kind === "rubberWindow" ? html`<${RubberWindowOutput} data=${data} />` : null}
     `;
   }

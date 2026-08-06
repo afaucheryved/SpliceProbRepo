@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+# Automatically resolve absolute path of SPLICEPROBREPO directory
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+run_backend() {
+  x-terminal-emulator -e bash -c "
+    cd '$PROJECT_DIR'
+    [ -f env/bin/activate ] && source env/bin/activate
+    echo '=== Starting FastAPI Backend (Port 8000) ==='
+    trap 'echo Shutting down FastAPI...; kill 0' EXIT INT TERM
+    fastapi dev app/main.py
+  " &
+}
+
+run_frontend() {
+  x-terminal-emulator -e bash -c "
+    cd '$PROJECT_DIR'
+    [ -f env/bin/activate ] && source env/bin/activate
+    echo '=== Starting Frontend Server (Port 5500) ==='
+    trap 'echo Shutting down Frontend...; kill 0' EXIT INT TERM
+    python3 frontend/serve.py
+  " &
+}
+
+case "$1" in
+  run)
+    echo "Launching FastAPI backend and Frontend server..."
+    run_backend
+    run_frontend
+    ;;
+  *)
+    echo "Usage: myapp run"
+    exit 1
+    ;;
+esac

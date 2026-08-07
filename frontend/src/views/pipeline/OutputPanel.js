@@ -3,6 +3,7 @@ import ChartJS from "https://esm.sh/chart.js@4.4.4/auto";
 import { Chart } from "../../components/shared/Chart.js";
 import { SequenceTrack } from "../../components/shared/SequenceTrack.js";
 import { ExportButton, tableToCsv, sequenceToText } from "../../components/shared/ExportButton.js";
+import { copyToClipboard } from "../../components/shared/SessionBar.js";
 import { useWorkspace } from "../../lib/workspace.js";
 import { useTheme, seriesColors } from "../../lib/theme.js";
 import { flattenProbaTrack, flattenDeltaTrack, deltaBarColors, zoneBorderStyle, trackedEntryZone, parseTrackedAlterationDisplay, topTrackedEntries } from "../../lib/sequence.js";
@@ -157,6 +158,14 @@ export function TrackedAlterationEntry({ label, entry }) {
   const { range } = trackedEntryZone(label, entry);
   const disp = parseTrackedAlterationDisplay(label, entry);
 
+  if (!entry.delta_proba && !entry.acceptor_proba) {
+    return html`
+      <div class="output-panel__history-entry" key=${label}>
+        <p class="output-panel__history-label mono">${disp ? html`<strong>${disp.stepNum}</strong> : <strong>${disp.opType}</strong> : ${disp.rangeText}` : label}</p>
+        <p class="field-hint">No probability data available for this per-match variant.</p>
+      </div>
+    `;
+  }
   if (!entry.delta_proba) {
     const acceptor = flattenProbaTrack(entry.acceptor_proba);
     const donor = flattenProbaTrack(entry.donor_proba);
@@ -230,7 +239,12 @@ export function TrackedAlterationEntry({ label, entry }) {
 }
 
 function ProbaHistoryOutput({ data, params }) {
-  const entries = Object.entries(data ?? {});
+  const allEntries = Object.entries(data ?? {});
+  const entries = allEntries.filter(([label, entry]) => {
+    if (label === "All modifications applied") return true;
+    if (entry.match_start != null) return false;
+    return true;
+  });
   if (entries.length === 0) {
     return html`<p class="output-panel__hint">No alterations tracked yet in this session — run a Sequence Modification block first.</p>`;
   }
@@ -266,17 +280,24 @@ function ProbaHistoryOutput({ data, params }) {
 }
   };
 
-  return html`
+return html`
     <div class="output-panel__section">
       <div class="output-panel__section-header">
         <p class="output-panel__hint">
           Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
         </p>
-        <${ExportButton} onExport=${handleExport} />
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <button type="button" class="session-bar__copy-btn" title="Copy delta scores to clipboard" onClick=${() => copyToClipboard(JSON.stringify(data, null, 2))}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="5" y="5" width="8" height="8" rx="1" />
+              <path d="M1 3a1 1 0 011-1h6a1 1 0 011 1v1" />
+            </svg>
+          </button>
+          <${ExportButton} onExport=${handleExport} />
+        </div>
       </div>
       ${renderedEntries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
-    </div>
-  `;
+    </div>`;
 }
 
 // rubber_window()'s response is now { analysis: [donorSegments, acceptorSegments],

@@ -6,7 +6,7 @@ import { ErrorBanner, Spinner } from "./Feedback.js";
 const SAMPLE_SEQUENCE =
   "acgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgtacgt";
 
-function copyToClipboard(text) {
+export function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text);
   } else {

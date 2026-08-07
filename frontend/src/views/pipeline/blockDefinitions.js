@@ -216,9 +216,6 @@ export const BLOCK_DEFINITIONS = [
     category: "Analysis",
     label: "Delta Score",
     summary: "Calculate the delta-score between the input sequence and the modified one.",
-    actions: [
-      { key: "dropModifications", label: "+ drop modifications" },
-    ],
     fields: [
       {
         key: "deltaMode",

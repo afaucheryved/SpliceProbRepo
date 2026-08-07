@@ -9,16 +9,6 @@ import { RecipeBlock } from "./RecipeBlock.js";
 import { OutputPanel } from "./OutputPanel.js";
 import { BLOCK_DEFINITIONS, defaultParams } from "./blockDefinitions.js";
 
-const MODIFICATION_BLOCK_IDS = [
-  "replace_substring",
-  "delete_substring",
-  "move_substring",
-  "copy_paste_substring",
-  "replace_motif",
-  "delete_motif",
-  "random_mutate",
-];
-
 const BLOCK_MAP = Object.fromEntries(BLOCK_DEFINITIONS.map((d) => [d.id, d]));
 
 let uidSeq = 0;
@@ -40,7 +30,7 @@ function summarize(def, result) {
     case "proba":
       return "→ baseline probability computed";
     case "probaHistory":
-      return `→ ${Object.keys(result ?? {}).length} tracked alteration(s)`;
+      return `→ ${Object.entries(result ?? {}).filter(([label, entry]) => entry.match_start == null && label !== "All modifications applied").length} tracked alteration(s)`;
     default:
       return "→ done";
   }
@@ -196,31 +186,6 @@ export function PipelineView() {
     setOverIndex(null);
   }
 
-  const handleBlockAction = useCallback((blockUid, actionKey) => {
-    setRecipe((r) => {
-      if (actionKey === "dropModifications") {
-        const blockIndex = r.findIndex((b) => b.uid === blockUid);
-        if (blockIndex === -1) return r;
-        const next = [...r];
-        const ids = [...MODIFICATION_BLOCK_IDS];
-        for (let i = ids.length - 1; i >= 0; i--) {
-          const def = BLOCK_MAP[ids[i]];
-          next.splice(blockIndex + 1, 0, {
-            uid: nextUid(),
-            defId: ids[i],
-            params: defaultParams(def),
-            enabled: true,
-            status: "idle",
-            error: null,
-            resultSummary: null,
-          });
-        }
-        return next;
-      }
-      return r;
-    });
-  }, []);
-
   async function bake() {
     if (!ws.sessionId) return;
     workspace.startCancelSession();
@@ -351,7 +316,6 @@ export function PipelineView() {
                     onParamsChange=${updateParams}
                     onRemove=${removeBlock}
                     onToggle=${toggleBlock}
-                    onBlockAction=${handleBlockAction}
                     dragHandlers=${{ ...dragHandlers, isOver: overIndex === index }}
                   />
                 `,

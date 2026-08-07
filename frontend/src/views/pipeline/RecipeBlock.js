@@ -14,7 +14,7 @@ const STATUS_ICON = {
 
 // A single stackable, draggable recipe card. Reordering is native HTML5
 // drag-and-drop (no extra dependency) driven by the parent PipelineView.
-export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, onBlockAction, dragHandlers }) {
+export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onToggle, dragHandlers }) {
   const [collapsed, setCollapsed] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   // Only the "Delta Score" block (probaHistory output) has a per-entry
@@ -60,18 +60,6 @@ export function RecipeBlock({ block, def, index, onParamsChange, onRemove, onTog
         ? html`
             <p class="recipe-block__summary">${def.summary}</p>
             <${BlockForm} def=${def} params=${block.params} onChange=${(p) => onParamsChange(block.uid, p)} />
-            ${def.actions?.map(
-              (action) => html`
-                <button
-                  key=${action.key}
-                  type="button"
-                  class="btn btn--small recipe-block__action"
-                  onClick=${() => onBlockAction?.(block.uid, action.key)}
-                >
-                  ${action.label}
-                </button>
-              `
-            )}
             ${block.progress && block.progress.type === "progress"
               ? html`<p class="recipe-block__progress">Batch ${block.progress.current_batch + 1} / ${block.progress.total_batches}</p>`
               : null}

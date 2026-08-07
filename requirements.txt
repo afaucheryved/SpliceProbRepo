@@ -6,3 +6,9 @@
  matplotlib
  numpy==2.4.6
  redis
+ httpx
+fakeredis
+scipy
+pytest
+requests
+# add missing import here, do not change these above this comment line.

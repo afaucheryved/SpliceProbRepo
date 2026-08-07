@@ -19,16 +19,10 @@ A FastAPI-based backend for computing splicing probabilities and analyzing seque
 - Python 3.10+
 - [Redis](https://redis.io/) (optional, for session persistence; falls back to in-memory if unavailable)
 
-### Installation
+### env / Installation / run in a single command
 
 ```bash
-pip install -r requirements.txt
-```
-
-### Running the app
-
-```bash
-./myapp run
+./myapp all
 ```
 Then open http://127.0.0.1:5500 in browser.
 

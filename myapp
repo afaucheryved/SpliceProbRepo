@@ -3,6 +3,22 @@
 # Automatically resolve absolute path of SPLICEPROBREPO directory
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+setup_env() {
+  cd "$PROJECT_DIR"
+  if [ ! -f env/bin/activate ]; then
+    echo "=== Creating virtual environment (env) ==="
+    python3 -m venv env
+  fi
+  source env/bin/activate
+  if [ -f requirements.txt ]; then
+    echo "=== Installing requirements ==="
+    pip install --upgrade pip
+    pip install -r requirements.txt
+  else
+    echo "No requirements.txt found, skipping install."
+  fi
+}
+
 run_backend() {
   x-terminal-emulator -e bash -c "
     cd '$PROJECT_DIR'
@@ -29,8 +45,14 @@ case "$1" in
     run_backend
     run_frontend
     ;;
+  all)
+    setup_env
+    echo "Launching FastAPI backend and Frontend server..."
+    run_backend
+    run_frontend
+    ;;
   *)
-    echo "Usage: myapp run"
+    echo "Usage: myapp run|all"
     exit 1
     ;;
 esac

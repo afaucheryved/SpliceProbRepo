@@ -1,8 +1,15 @@
-﻿ spliceai
- fastapi[standard]
- setuptools==69.5.1
- tensorflow
- ruptures
- matplotlib
- numpy==2.4.6
- redis
+﻿spliceai
+fastapi[standard]
+setuptools==69.5.1
+tensorflow
+keras
+ruptures
+matplotlib
+numpy==2.4.6
+scipy
+redis
+fakeredis
+requests
+pydantic
+httpx
+pytest

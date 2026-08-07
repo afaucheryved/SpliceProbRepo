@@ -30,7 +30,7 @@ function summarize(def, result) {
     case "proba":
       return "→ baseline probability computed";
     case "probaHistory":
-      return `→ ${Object.entries(result ?? {}).filter(([label, entry]) => entry.match_start == null && label !== "All modifications applied").length} tracked alteration(s)`;
+      return `→ ${Object.entries(result ?? {}).filter(([label]) => label !== "All modifications applied").length} tracked alteration(s)`;
     default:
       return "→ done";
   }

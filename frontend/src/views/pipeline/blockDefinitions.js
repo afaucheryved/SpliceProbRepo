@@ -241,11 +241,23 @@ export const BLOCK_DEFINITIONS = [
       { key: "topN", label: "", type: "int", default: 5, showIf: (p) => p.deltaMode === "independent" && p.entityFilter === "topN" },
     ],
     outputKind: "probaHistory",
-    run: (params) => {
+    run: async (params) => {
       if (params.deltaMode === "all") {
         return workspace.fetchDeltaProba();
       }
-      return workspace.fetchAllSimpleProbas();
+      const allSimple = await workspace.fetchAllSimpleProbas();
+      try {
+        const combined = await api.get.deltaProba(workspace.getState().sessionId);
+        return {
+          "All modifications applied": {
+            delta_proba: combined,
+            "altered sequence": workspace.getState().alteredSequence,
+          },
+          ...allSimple,
+        };
+      } catch {
+        return allSimple;
+      }
     },
   },
   {

@@ -68,7 +68,15 @@ function SequenceOutput({ sequence, operations }) {
     <div class="output-panel__section">
       <div class="output-panel__section-header">
         <p class="output-panel__hint">Resulting sequence after this recipe step (diff vs. the original base sequence):</p>
-        <${ExportButton} onExport=${handleExport} hidePng=${true} />
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <button type="button" class="session-bar__copy-btn" title="Copy sequence to clipboard" onClick=${() => copyToClipboard(sequence)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+          <${ExportButton} onExport=${handleExport} hidePng=${true} />
+        </div>
       </div>
       <${SequenceTrack} sequence=${sequence} reference=${ws.baseSequence} operations=${operations} />
     </div>
@@ -240,19 +248,21 @@ export function TrackedAlterationEntry({ label, entry }) {
 
 function ProbaHistoryOutput({ data, params }) {
   const allEntries = Object.entries(data ?? {});
-  const entries = allEntries.filter(([label, entry]) => {
-    if (label === "All modifications applied") return true;
-    if (entry.match_start != null) return false;
-    return true;
-  });
+  const isAllMode = params?.deltaMode !== "independent";
+  const entries = isAllMode
+    ? allEntries.filter(([label]) => label === "All modifications applied")
+    : allEntries;
   if (entries.length === 0) {
     return html`<p class="output-panel__hint">No alterations tracked yet in this session — run a Sequence Modification block first.</p>`;
   }
 
   let renderedEntries = entries;
   const useTopN = params?.entityFilter === "topN";
-  if (useTopN && entries.length > 0) {
-    renderedEntries = topTrackedEntries(data, params.topN).map((s) => [s.label, s.entry]);
+  if (useTopN && !isAllMode) {
+    const combinedEntry = entries.find(([label]) => label === "All modifications applied");
+    const rankable = entries.filter(([label]) => label !== "All modifications applied");
+    const ranked = topTrackedEntries(Object.fromEntries(rankable), params.topN).map((s) => [s.label, s.entry]);
+    renderedEntries = combinedEntry ? [combinedEntry, ...ranked] : ranked;
   }
 
   const allStats = renderedEntries.map(([label, entry]) => {
@@ -286,15 +296,7 @@ return html`
         <p class="output-panel__hint">
           Change in splicing probability vs. the base sequence, per tracked alteration (one acceptor/donor pair per entry, chronological order).
         </p>
-        <div style="display:flex; gap:0.5rem; align-items:center;">
-          <button type="button" class="session-bar__copy-btn" title="Copy delta scores to clipboard" onClick=${() => copyToClipboard(JSON.stringify(data, null, 2))}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="5" y="5" width="8" height="8" rx="1" />
-              <path d="M1 3a1 1 0 011-1h6a1 1 0 011 1v1" />
-            </svg>
-          </button>
-          <${ExportButton} onExport=${handleExport} />
-        </div>
+        <${ExportButton} onExport=${handleExport} />
       </div>
       ${renderedEntries.map(([label, entry]) => html`<${TrackedAlterationEntry} key=${label} label=${label} entry=${entry} />`)}
     </div>`;
